@@ -33,9 +33,9 @@ pub mod prelude;
 use crate::buffer::*;
 
 use conversion::Wrap;
-use polars::export::rayon::prelude::*;
 use polars::{frame::row::*, prelude::*};
 use polars_core::POOL;
+use rayon::prelude::*;
 
 use mongodb::{
     bson::{Bson, Document},
@@ -45,9 +45,9 @@ use mongodb::{
 use polars_core::utils::accumulate_dataframes_vertical;
 
 pub struct MongoScan {
-    client_options: ClientOptions,
-    db: String,
-    collection_name: String,
+    pub client_options: ClientOptions, //Remove pub
+    pub db: String,                    //Remove pub
+    pub collection_name: String,       //Remove pub
     pub collection: Option<Collection<Document>>,
     pub n_threads: Option<usize>,
     pub batch_size: Option<usize>,
@@ -65,7 +65,7 @@ impl MongoScan {
     }
 
     pub fn new(connection_str: String, db: String, collection: String) -> PolarsResult<Self> {
-        let client_options = ClientOptions::parse(connection_str).map_err(|e| {
+        let client_options = ClientOptions::parse(connection_str).run().map_err(|e| {
             PolarsError::InvalidOperation(format!("unable to connect to mongodb: {}", e).into())
         })?;
 
@@ -90,7 +90,7 @@ impl MongoScan {
     fn parse_lines<'a>(
         &self,
         mut cursor: Cursor<Document>,
-        buffers: &mut PlIndexMap<String, Buffer<'a>>,
+        buffers: &mut PlIndexMap<PlSmallStr, Buffer<'a>>,
     ) -> mongodb::error::Result<()> {
         while let Some(Ok(doc)) = cursor.next() {
             buffers.iter_mut().for_each(|(s, inner)| match doc.get(s) {
@@ -103,99 +103,116 @@ impl MongoScan {
 }
 
 impl AnonymousScan for MongoScan {
-    fn scan(&self, scan_opts: AnonymousScanOptions) -> PolarsResult<DataFrame> {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn scan(&self, scan_opts: AnonymousScanArgs) -> PolarsResult<DataFrame> {
         let collection = &self.get_collection();
-
+        let filter = expr_to_document(scan_opts.predicate.unwrap());
         let projection = scan_opts.output_schema.clone().map(|schema| {
             let prj = schema
                 .iter_names()
-                .map(|name| (name.clone(), Bson::Int64(1)));
+                .map(|name| (name.to_string(), Bson::Int64(1)));
 
             Document::from_iter(prj)
         });
 
         let mut find_options = FindOptions::default();
+
         find_options.projection = projection;
         find_options.batch_size = self.batch_size.map(|b| b as u32);
 
-        let schema = scan_opts.output_schema.unwrap_or(scan_opts.schema);
+        let schema = if let Some(schema) = scan_opts.output_schema {
+            schema
+        } else if !scan_opts.schema.is_empty() {
+            scan_opts.schema
+        } else {
+            Arc::new((*self.schema(None)?).clone())
+        };
 
-        // if no n_rows we need to get the count from mongo.
-        let n_rows = scan_opts
-            .n_rows
-            .unwrap_or_else(|| collection.estimated_document_count(None).unwrap() as usize);
+        let n_rows = match scan_opts.n_rows {
+            Some(n) => n,
+            None => collection.estimated_document_count().run().unwrap_or(0) as usize,
+        };
 
         let mut n_threads = self.n_threads.unwrap_or_else(|| POOL.current_num_threads());
-
         if n_rows < 128 {
             n_threads = 1
         }
 
         let rows_per_thread = n_rows / n_threads;
+        let projection = find_options.projection.unwrap_or(Document::new());
 
-        let dfs = POOL.install(|| {
-            (0..n_threads)
-                .into_par_iter()
-                .map(|idx| {
-                    let mut find_options = find_options.clone();
-
+        let dfs = POOL
+            .install(|| {
+                (0..n_threads).into_par_iter().map(|idx| {
                     let start = idx * rows_per_thread;
 
-                    find_options.skip = Some(start as u64);
-                    find_options.limit = Some(rows_per_thread as i64);
-                    let cursor = collection.find(None, Some(find_options));
+                    let cursor = collection
+                        .find(Document::new())
+                        .skip(start as u64)
+                        .limit(rows_per_thread as i64)
+                        .projection(projection.clone())
+                        .batch_size(self.batch_size.unwrap_or(1) as u32)
+                        .run()
+                        .map_err(|err| {
+                            PolarsError::ComputeError(format!("Mongo find failed: {}", err).into())
+                        })?;
+
                     let mut buffers = init_buffers(schema.as_ref(), rows_per_thread)?;
 
-                    self.parse_lines(cursor.unwrap(), &mut buffers)
+                    // 3. Parse lines into the buffers
+                    self.parse_lines(cursor, &mut buffers)
                         .map_err(|err| PolarsError::ComputeError(format!("{:#?}", err).into()))?;
 
-                    DataFrame::new(
-                        buffers
-                            .into_values()
-                            .map(|buf| buf.into_series())
-                            .collect::<PolarsResult<_>>()?,
-                    )
+                    // 4. Create the DataFrame for this chunk
+                    let series = buffers
+                        .into_values()
+                        .map(|buf| Column::from(buf.into_series().unwrap()))
+                        .collect::<Vec<Column>>();
+
+                    DataFrame::new(rows_per_thread, series)
                 })
-                .collect::<PolarsResult<Vec<_>>>()
-        })?;
+            })
+            .collect::<PolarsResult<Vec<_>>>()?;
         let mut df = accumulate_dataframes_vertical(dfs)?;
 
         if self.rechunk {
-            df.rechunk();
+            df.rechunk_mut();
         }
         Ok(df)
     }
 
-    fn schema(&self, infer_schema_length: Option<usize>) -> PolarsResult<Schema> {
-        let collection = self.get_collection();
+    fn schema(&self, infer_schema_length: Option<usize>) -> PolarsResult<Arc<Schema>> {
+        let collection: Collection<Document> = self.get_collection();
+        let limit = infer_schema_length.unwrap_or(100);
+        let cursor = collection
+            .find(Document::new())
+            .limit(limit as i64)
+            .run()
+            .map_err(|err| {
+                PolarsError::ComputeError(format!("MongoDB find failed: {:#?}", err).into())
+            })?;
+        let docs_iter = cursor.take(limit).map(|doc_res| {
+            let doc = doc_res.expect("Failed to read document from MongoDB cursor");
 
-        let infer_options = FindOptions::builder()
-            .limit(infer_schema_length.map(|i| i as i64))
-            .build();
-
-        let res = collection
-            .find(None, Some(infer_options))
-            .map_err(|err| PolarsError::ComputeError(format!("{:#?}", err).into()))?;
-        let iter = res.map(|doc| {
-            let val = doc.unwrap();
-            val.into_iter()
+            doc.into_iter()
                 .map(|(key, value)| {
-                    let dtype = Wrap::<DataType>::from(&value);
-                    (key, dtype.0)
+                    let dtype: Wrap<DataType> = (&value).into();
+                    (PlSmallStr::from_str(&key), dtype.0)
                 })
-                .collect()
+                .collect::<Vec<_>>() // This creates the Vec<(PlSmallStr, DataType)> per row
         });
-        let schema = infer_schema(iter, infer_schema_length.unwrap_or(100));
-        Ok(schema)
+
+        // 3. Infer schema from the collected PlIndexMaps
+        let schema = infer_schema(docs_iter, limit);
+        Ok(Arc::new(schema))
     }
 
     fn allows_predicate_pushdown(&self) -> bool {
         true
     }
     fn allows_projection_pushdown(&self) -> bool {
-        true
-    }
-    fn allows_slice_pushdown(&self) -> bool {
         true
     }
 }
@@ -220,7 +237,6 @@ pub struct MongoScanOptions {
 pub trait MongoLazyReader {
     fn scan_mongo_collection(options: MongoScanOptions) -> PolarsResult<LazyFrame> {
         let f = MongoScan::new(options.connection_str, options.db, options.collection)?;
-
         let args = ScanArgsAnonymous {
             name: "MONGO SCAN",
             infer_schema_length: options.infer_schema_length,
@@ -231,5 +247,8 @@ pub trait MongoLazyReader {
         LazyFrame::anonymous_scan(Arc::new(f), args)
     }
 }
-
+fn expr_to_document(expr: Expr) -> Result<(), Box<dyn std::error::Error>> {
+    // println!("expr {:#?}", expr);
+    Ok(())
+}
 impl MongoLazyReader for LazyFrame {}

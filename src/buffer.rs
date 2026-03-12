@@ -1,32 +1,48 @@
 use crate::conversion::*;
 use mongodb::bson::Bson;
 use num::traits::NumCast;
-use polars::export::arrow::types::NativeType;
 use polars::prelude::*;
+use polars_arrow::types::NativeType;
 
 pub(crate) fn init_buffers(
     schema: &polars::prelude::Schema,
     capacity: usize,
-) -> PolarsResult<PlIndexMap<String, Buffer>> {
+) -> PolarsResult<PlIndexMap<PlSmallStr, Buffer<'_>>> {
     schema
         .iter()
         .map(|(name, dtype)| {
             let builder = match &dtype {
-                DataType::Boolean => Buffer::Boolean(BooleanChunkedBuilder::new(name, capacity)),
-                DataType::Int32 => Buffer::Int32(PrimitiveChunkedBuilder::new(name, capacity)),
-                DataType::Int64 => Buffer::Int64(PrimitiveChunkedBuilder::new(name, capacity)),
-                DataType::UInt32 => Buffer::UInt32(PrimitiveChunkedBuilder::new(name, capacity)),
-                DataType::UInt64 => Buffer::UInt64(PrimitiveChunkedBuilder::new(name, capacity)),
-                DataType::Float32 => Buffer::Float32(PrimitiveChunkedBuilder::new(name, capacity)),
-                DataType::Float64 => Buffer::Float64(PrimitiveChunkedBuilder::new(name, capacity)),
-                DataType::Utf8 => {
-                    Buffer::Utf8(Utf8ChunkedBuilder::new(name, capacity, capacity * 5))
+                DataType::Boolean => {
+                    Buffer::Boolean(BooleanChunkedBuilder::new(name.clone(), capacity))
+                }
+                DataType::Int32 => {
+                    Buffer::Int32(PrimitiveChunkedBuilder::new(name.clone(), capacity))
+                }
+                DataType::Int64 => {
+                    Buffer::Int64(PrimitiveChunkedBuilder::new(name.clone(), capacity))
+                }
+                DataType::UInt32 => {
+                    Buffer::UInt32(PrimitiveChunkedBuilder::new(name.clone(), capacity))
+                }
+                DataType::UInt64 => {
+                    Buffer::UInt64(PrimitiveChunkedBuilder::new(name.clone(), capacity))
+                }
+                DataType::Float32 => {
+                    Buffer::Float32(PrimitiveChunkedBuilder::new(name.clone(), capacity))
+                }
+                DataType::Float64 => {
+                    Buffer::Float64(PrimitiveChunkedBuilder::new(name.clone(), capacity))
+                }
+                DataType::String => {
+                    Buffer::String(StringChunkedBuilder::new(name.clone(), capacity))
                 }
                 DataType::Datetime(_, _) => {
-                    Buffer::Datetime(PrimitiveChunkedBuilder::new(name, capacity))
+                    Buffer::Datetime(PrimitiveChunkedBuilder::new(name.clone(), capacity))
                 }
-                DataType::Date => Buffer::Date(PrimitiveChunkedBuilder::new(name, capacity)),
-                _ => Buffer::All((Vec::with_capacity(capacity), name)),
+                DataType::Date => {
+                    Buffer::Date(PrimitiveChunkedBuilder::new(name.clone(), capacity))
+                }
+                _ => Buffer::All((Vec::with_capacity(capacity), name.as_str())),
             };
             Ok((name.clone(), builder))
         })
@@ -42,7 +58,7 @@ pub(crate) enum Buffer<'a> {
     UInt64(PrimitiveChunkedBuilder<UInt64Type>),
     Float32(PrimitiveChunkedBuilder<Float32Type>),
     Float64(PrimitiveChunkedBuilder<Float64Type>),
-    Utf8(Utf8ChunkedBuilder),
+    String(StringChunkedBuilder),
     Datetime(PrimitiveChunkedBuilder<Int64Type>),
     Date(PrimitiveChunkedBuilder<Int32Type>),
     All((Vec<AnyValue<'a>>, &'a str)),
@@ -64,8 +80,8 @@ impl<'a> Buffer<'a> {
                 .cast(&DataType::Datetime(TimeUnit::Milliseconds, None))
                 .unwrap(),
             Buffer::Date(v) => v.finish().into_series().cast(&DataType::Date).unwrap(),
-            Buffer::Utf8(v) => v.finish().into_series(),
-            Buffer::All((vals, name)) => Series::new(name, vals),
+            Buffer::String(v) => v.finish().into_series(),
+            Buffer::All((vals, name)) => Series::new(name.into(), vals),
         };
         Ok(s)
     }
@@ -79,7 +95,7 @@ impl<'a> Buffer<'a> {
             Buffer::UInt64(v) => v.append_null(),
             Buffer::Float32(v) => v.append_null(),
             Buffer::Float64(v) => v.append_null(),
-            Buffer::Utf8(v) => v.append_null(),
+            Buffer::String(v) => v.append_null(),
             Buffer::Datetime(v) => v.append_null(),
             Buffer::Date(v) => v.append_null(),
             Buffer::All((v, _)) => v.push(AnyValue::Null),
@@ -144,7 +160,7 @@ impl<'a> Buffer<'a> {
                 Ok(())
             }
 
-            Utf8(buf) => {
+            String(buf) => {
                 match value {
                     Bson::RegularExpression(r) => buf.append_value(r.to_string()),
                     Bson::ObjectId(oid) => buf.append_value(oid.to_hex()),

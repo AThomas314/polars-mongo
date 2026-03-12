@@ -13,25 +13,21 @@ crate-type = ["lib"]
 
 
 [dependencies]
-num = "^0.4"
-polars-time = "0.24.0"
-polars-core = "0.24.0"
-serde = {version = "1.0.137", features = ["derive", "rc"], optional = true}
-
-[dependencies.mongodb]
-version = "2.2.1"
-default-features = false
-features = ["sync"]
-
-
-[dependencies.polars]
-version = "0.24.0"
-features = ["lazy", "dtype-full"]
+mongodb = { version = "3.5.1", features = ["sync"] }
+num = "0.4.3"
+polars = {version = "0.53.0" ,features = ["lazy", "dtype-full"]}
+polars-arrow = "0.53.0"
+polars-core = "0.53.0"
+polars-time = "0.53.0"
+rayon = "1.11.0"
+serde = {version =  "1.0.228",features = ["derive", "rc"], optional = true}
+tokio = "1.50.0"
 
 
 
 [profile.release]
 lto = "fat"
+opt-level = 3
 
 [workspace]
 members = [
