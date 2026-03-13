@@ -45,9 +45,9 @@ use mongodb::{
 use polars_core::utils::accumulate_dataframes_vertical;
 
 pub struct MongoScan {
-    pub client_options: ClientOptions, //Remove pub
-    pub db: String,                    //Remove pub
-    pub collection_name: String,       //Remove pub
+    client_options: ClientOptions,
+    db: String,
+    collection_name: String,
     pub collection: Option<Collection<Document>>,
     pub n_threads: Option<usize>,
     pub batch_size: Option<usize>,
@@ -93,10 +93,16 @@ impl MongoScan {
         buffers: &mut PlIndexMap<PlSmallStr, Buffer<'a>>,
     ) -> mongodb::error::Result<()> {
         while let Some(Ok(doc)) = cursor.next() {
-            buffers.iter_mut().for_each(|(s, inner)| match doc.get(s) {
-                Some(v) => inner.add(v).expect("was not able to add to buffer."),
-                None => inner.add_null(),
-            });
+            for (field_path, inner_buffer) in buffers.iter_mut() {
+                match get_nested_bson(&doc, field_path.as_str()) {
+                    Some(v) => {
+                        inner_buffer.add(v).expect("Failed to add value to buffer");
+                    }
+                    None => {
+                        inner_buffer.add_null();
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -108,7 +114,7 @@ impl AnonymousScan for MongoScan {
     }
     fn scan(&self, scan_opts: AnonymousScanArgs) -> PolarsResult<DataFrame> {
         let collection = &self.get_collection();
-        let filter = expr_to_document(scan_opts.predicate.unwrap());
+        let filter = expr_to_document(scan_opts.predicate);
         let projection = scan_opts.output_schema.clone().map(|schema| {
             let prj = schema
                 .iter_names()
@@ -116,20 +122,20 @@ impl AnonymousScan for MongoScan {
 
             Document::from_iter(prj)
         });
-
         let mut find_options = FindOptions::default();
 
         find_options.projection = projection;
         find_options.batch_size = self.batch_size.map(|b| b as u32);
 
-        let schema = if let Some(schema) = scan_opts.output_schema {
-            schema
-        } else if !scan_opts.schema.is_empty() {
-            scan_opts.schema
-        } else {
-            Arc::new((*self.schema(None)?).clone())
-        };
-
+        let schema = scan_opts.output_schema.unwrap_or_else(|| {
+            let filtered: Schema = scan_opts
+                .schema
+                .iter()
+                .filter(|(name, _)| !name.contains('.'))
+                .map(|(name, dtype)| (name.clone(), dtype.clone()))
+                .collect();
+            Arc::new(filtered)
+        });
         let n_rows = match scan_opts.n_rows {
             Some(n) => n,
             None => collection.estimated_document_count().run().unwrap_or(0) as usize,
@@ -160,17 +166,12 @@ impl AnonymousScan for MongoScan {
                         })?;
 
                     let mut buffers = init_buffers(schema.as_ref(), rows_per_thread)?;
-
-                    // 3. Parse lines into the buffers
                     self.parse_lines(cursor, &mut buffers)
                         .map_err(|err| PolarsError::ComputeError(format!("{:#?}", err).into()))?;
-
-                    // 4. Create the DataFrame for this chunk
                     let series = buffers
                         .into_values()
                         .map(|buf| Column::from(buf.into_series().unwrap()))
                         .collect::<Vec<Column>>();
-
                     DataFrame::new(rows_per_thread, series)
                 })
             })
@@ -186,6 +187,7 @@ impl AnonymousScan for MongoScan {
     fn schema(&self, infer_schema_length: Option<usize>) -> PolarsResult<Arc<Schema>> {
         let collection: Collection<Document> = self.get_collection();
         let limit = infer_schema_length.unwrap_or(100);
+
         let cursor = collection
             .find(Document::new())
             .limit(limit as i64)
@@ -193,22 +195,18 @@ impl AnonymousScan for MongoScan {
             .map_err(|err| {
                 PolarsError::ComputeError(format!("MongoDB find failed: {:#?}", err).into())
             })?;
+
         let docs_iter = cursor.take(limit).map(|doc_res| {
             let doc = doc_res.expect("Failed to read document from MongoDB cursor");
-
-            doc.into_iter()
-                .map(|(key, value)| {
-                    let dtype: Wrap<DataType> = (&value).into();
-                    (PlSmallStr::from_str(&key), dtype.0)
-                })
-                .collect::<Vec<_>>() // This creates the Vec<(PlSmallStr, DataType)> per row
+            let mut row_fields = Vec::new();
+            collect_fields(&doc, None, &mut row_fields);
+            row_fields
         });
 
-        // 3. Infer schema from the collected PlIndexMaps
+        // infer_schema will now merge all these paths across the 'limit' documents
         let schema = infer_schema(docs_iter, limit);
         Ok(Arc::new(schema))
     }
-
     fn allows_predicate_pushdown(&self) -> bool {
         true
     }
@@ -243,12 +241,52 @@ pub trait MongoLazyReader {
             n_rows: options.n_rows,
             ..ScanArgsAnonymous::default()
         };
-
         LazyFrame::anonymous_scan(Arc::new(f), args)
     }
 }
-fn expr_to_document(expr: Expr) -> Result<(), Box<dyn std::error::Error>> {
-    // println!("expr {:#?}", expr);
-    Ok(())
+fn expr_to_document(expr: Option<Expr>) -> Result<Document, Box<dyn std::error::Error>> {
+    match expr {
+        Some(expr) => {
+            println!("expr {:#?}", expr);
+            Ok(Document::new())
+        }
+        None => Ok(Document::new()),
+    }
 }
+fn collect_fields(doc: &Document, prefix: Option<&str>, fields: &mut Vec<(PlSmallStr, DataType)>) {
+    for (key, value) in doc {
+        let name = match prefix {
+            Some(p) => format!("{}.{}", p, key),
+            None => key.clone(),
+        };
+
+        let dtype: Wrap<DataType> = value.into();
+        fields.push((PlSmallStr::from_str(&name), dtype.0.clone()));
+
+        // If it's a nested document, recurse to expose sub-fields
+        if let Bson::Document(inner_doc) = value {
+            collect_fields(inner_doc, Some(&name), fields);
+        }
+    }
+}
+fn get_nested_bson<'a>(doc: &'a Document, path: &str) -> Option<&'a Bson> {
+    let mut current_value: Option<&Bson> = None;
+    let mut current_doc = doc;
+    let parts: Vec<&str> = path.split('.').collect();
+
+    for (i, part) in parts.iter().enumerate() {
+        if i == parts.len() - 1 {
+            // We've reached the final key in the path
+            current_value = current_doc.get(part);
+        } else {
+            // Move deeper into the nested document
+            match current_doc.get(part) {
+                Some(Bson::Document(next_doc)) => current_doc = next_doc,
+                _ => return None, // Path doesn't exist or isn't a document
+            }
+        }
+    }
+    current_value
+}
+
 impl MongoLazyReader for LazyFrame {}

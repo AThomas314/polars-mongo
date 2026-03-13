@@ -13,7 +13,12 @@ pub fn main() -> PolarsResult<()> {
         infer_schema_length: Some(1000),
         n_rows: None,
     })?
-    .filter(col(PlSmallStr::from_str("startTimeLocal")).eq(lit("Thu Mar 12 00:18:42.288")))
+    .select([
+        col(PlSmallStr::from_str("_id")),
+        col(PlSmallStr::from_str("cmdLine.storage")),
+        col(PlSmallStr::from_str("cmdLine.config")),
+        col(PlSmallStr::from_str("buildinfo.versionArray")),
+    ])
     .collect()?;
     dbg!(df);
     Ok(())
