@@ -1,6 +1,6 @@
 //! Polars mongo is a connector to read from a mongodb collection into a Polars dataframe.
 //! Usage:
-//! ```rust
+//! ```no_run
 //! use polars::prelude::*;
 //! use polars_mongo::prelude::*;
 //!
@@ -114,7 +114,6 @@ impl AnonymousScan for MongoScan {
     }
     fn scan(&self, scan_opts: AnonymousScanArgs) -> PolarsResult<DataFrame> {
         let collection = &self.get_collection();
-        let filter = expr_to_document(scan_opts.predicate);
         let projection = scan_opts.output_schema.clone().map(|schema| {
             let prj = schema
                 .iter_names()
@@ -208,7 +207,7 @@ impl AnonymousScan for MongoScan {
         Ok(Arc::new(schema))
     }
     fn allows_predicate_pushdown(&self) -> bool {
-        true
+        false
     }
     fn allows_projection_pushdown(&self) -> bool {
         true
@@ -244,15 +243,7 @@ pub trait MongoLazyReader {
         LazyFrame::anonymous_scan(Arc::new(f), args)
     }
 }
-fn expr_to_document(expr: Option<Expr>) -> Result<Document, Box<dyn std::error::Error>> {
-    match expr {
-        Some(expr) => {
-            println!("expr {:#?}", expr);
-            Ok(Document::new())
-        }
-        None => Ok(Document::new()),
-    }
-}
+
 fn collect_fields(doc: &Document, prefix: Option<&str>, fields: &mut Vec<(PlSmallStr, DataType)>) {
     for (key, value) in doc {
         let name = match prefix {
@@ -263,7 +254,6 @@ fn collect_fields(doc: &Document, prefix: Option<&str>, fields: &mut Vec<(PlSmal
         let dtype: Wrap<DataType> = value.into();
         fields.push((PlSmallStr::from_str(&name), dtype.0.clone()));
 
-        // If it's a nested document, recurse to expose sub-fields
         if let Bson::Document(inner_doc) = value {
             collect_fields(inner_doc, Some(&name), fields);
         }
@@ -290,3 +280,110 @@ fn get_nested_bson<'a>(doc: &'a Document, path: &str) -> Option<&'a Bson> {
 }
 
 impl MongoLazyReader for LazyFrame {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mongodb::bson::doc;
+
+    // -------------------------------------------------------------------------
+    // 1. Tests for `get_nested_bson`
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_get_nested_bson_flat() {
+        let document = doc! {
+            "name": "Alice",
+            "age": 30i32
+        };
+
+        // Test existing top-level fields
+        assert_eq!(
+            get_nested_bson(&document, "name"),
+            Some(&Bson::String("Alice".to_string()))
+        );
+        assert_eq!(get_nested_bson(&document, "age"), Some(&Bson::Int32(30)));
+
+        // Test missing field
+        assert_eq!(get_nested_bson(&document, "missing"), None);
+    }
+
+    #[test]
+    fn test_get_nested_bson_deep() {
+        let document = doc! {
+            "user": {
+                "profile": {
+                    "email": "alice@example.com",
+                    "id": 100i32
+                }
+            }
+        };
+
+        assert_eq!(
+            get_nested_bson(&document, "user.profile.email"),
+            Some(&Bson::String("alice@example.com".to_string()))
+        );
+        assert_eq!(
+            get_nested_bson(&document, "user.profile.id"),
+            Some(&Bson::Int32(100))
+        );
+
+        let profile_doc = get_nested_bson(&document, "user.profile").unwrap();
+        assert!(matches!(profile_doc, Bson::Document(_)));
+
+        assert_eq!(get_nested_bson(&document, "user.profile.id.invalid"), None);
+    }
+
+    #[test]
+    fn test_collect_fields_flat() {
+        let document = doc! {
+            "name": "Bob",
+            "active": true
+        };
+
+        let mut fields = Vec::new();
+        collect_fields(&document, None, &mut fields);
+
+        fields.sort_by(|a, b| a.0.cmp(&b.0));
+
+        assert_eq!(fields.len(), 2);
+        assert_eq!(fields[0].0.as_str(), "active");
+        assert_eq!(fields[0].1, DataType::Boolean);
+        assert_eq!(fields[1].0.as_str(), "name");
+        assert_eq!(fields[1].1, DataType::String);
+    }
+
+    #[test]
+    fn test_collect_fields_nested() {
+        let document = doc! {
+            "config": {
+                "port": 8080i32
+            }
+        };
+
+        let mut fields = Vec::new();
+        collect_fields(&document, None, &mut fields);
+
+        assert_eq!(fields.len(), 2);
+
+        let config_field = fields
+            .iter()
+            .find(|(name, _)| name.as_str() == "config")
+            .unwrap();
+        let port_field = fields
+            .iter()
+            .find(|(name, _)| name.as_str() == "config.port")
+            .unwrap();
+
+        assert_eq!(port_field.1, DataType::Int32);
+
+        match &config_field.1 {
+            DataType::Struct(struct_fields) => {
+                assert_eq!(struct_fields.len(), 1);
+                assert_eq!(struct_fields[0].name().as_str(), "port");
+                assert_eq!(struct_fields[0].dtype(), &DataType::Int32);
+            }
+            _ => panic!("Expected config to be a Struct datatype"),
+        }
+    }
+}

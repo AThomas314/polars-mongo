@@ -1,12 +1,12 @@
 [package]
 name = "polars-mongo"
-version = "0.2.0"
-edition = "2021"
-authors = ["universalmind303 <cory.grinstead@gmail.com>"]
+version = "0.1.0"
+edition = "2024"
+authors = ["Ashish Thomas <ashishthomassm@gmail.com","universalmind303 <cory.grinstead@gmail.com>"]
 license = "MIT"
-keywords = ["dataframe", "query-engine", "arrow", "polars", "database"]
-description = "Connector to read polars dataframes from mongodb collections"
-repository = "https://github.com/universalmind303/polars-mongo/"
+keywords = ["dataframe", "query-engine", "arrow", "polars", "database","mongo"]
+description = "Connector to read polars dataframes from mongodb collections with full projection pushdown, including nested fields"
+repository = "https://github.com/AThomas314/polars-mongo/"
 
 [lib]
 crate-type = ["lib"]
@@ -33,3 +33,9 @@ opt-level = 3
 members = [
   "examples/read_collection"
 ]
+
+[dev-dependencies]
+serde_json = "1.0.149"
+testcontainers = {version ="0.27.1",  features = ["blocking"]}
+testcontainers-modules = { version = "0.15", features = ["mongo"] }
+tokio = "1.50.0"

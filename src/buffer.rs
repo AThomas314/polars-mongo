@@ -221,3 +221,137 @@ fn deserialize_date<T: NativeType + NumCast>(value: &Bson) -> Option<T> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::i32;
+
+    use super::*;
+
+    #[test]
+    fn deserialize_double() {
+        let d = Bson::Double(314159.265359);
+        assert_eq!(deserialize_number(&d), Some(314159.265359));
+    }
+    #[test]
+    fn deserialize_i32() {
+        let d = Bson::Int32(314159);
+        assert_eq!(deserialize_number(&d), Some(314159i32));
+    }
+    #[test]
+    fn deserialize_i64() {
+        let d = Bson::Int64(314159);
+        assert_eq!(deserialize_number(&d), Some(314159i64));
+    }
+    #[test]
+    fn deserialize_bool_true() {
+        let d = Bson::Boolean(true);
+        assert_eq!(deserialize_number(&d), Some(1));
+    }
+    #[test]
+    fn deserialize_bool_false() {
+        let d = Bson::Boolean(false);
+        assert_eq!(deserialize_number(&d), Some(0));
+    }
+    #[test]
+    fn test_deserialize_date() {
+        use mongodb::bson::DateTime as MongoDateTime;
+        let millis = 1704067200000i64;
+        let dt = Bson::DateTime(MongoDateTime::from_millis(millis));
+
+        assert_eq!(deserialize_date::<i64>(&dt), Some(millis));
+
+        let d_num = Bson::Int64(millis);
+        assert_eq!(deserialize_date::<i64>(&d_num), Some(millis));
+
+        let small_millis = 12345678i64;
+        let dt_small = Bson::DateTime(MongoDateTime::from_millis(small_millis));
+        assert_eq!(deserialize_date::<i32>(&dt_small), Some(12345678i32));
+
+        let invalid = Bson::String("2024-01-01".to_string());
+        assert_eq!(deserialize_date::<i64>(&invalid), None);
+    }
+    #[test]
+    fn test_bool_buffer() -> Result<(), Box<dyn std::error::Error>> {
+        let mut buf = Buffer::Boolean(BooleanChunkedBuilder::new(PlSmallStr::from_str("name"), 3));
+        buf.add(&Bson::Boolean(false))?;
+        buf.add(&Bson::Boolean(false))?;
+        buf.add(&Bson::Boolean(true))?;
+
+        assert_eq!(
+            buf.into_series()?,
+            Series::from_vec(PlSmallStr::from_str("name"), vec![0, 0, 1])
+                .cast(&DataType::Boolean)?
+        );
+        Ok(())
+    }
+    #[test]
+    fn test_i32_buffer() -> Result<(), Box<dyn std::error::Error>> {
+        let mut buf = Buffer::Int32(PrimitiveChunkedBuilder::new(
+            PlSmallStr::from_str("name"),
+            3,
+        ));
+        buf.add(&Bson::Int32(i32::MIN))?;
+        buf.add(&Bson::Int32((i32::MIN + i32::MAX) / 2))?;
+        buf.add(&Bson::Int32(i32::MAX))?;
+
+        assert_eq!(
+            buf.into_series()?,
+            Series::from_vec(
+                PlSmallStr::from_str("name"),
+                vec![i32::MIN, ((i32::MIN + i32::MAX) / 2), i32::MAX]
+            )
+        );
+        Ok(())
+    }
+    #[test]
+    fn test_i64_buffer() -> Result<(), Box<dyn std::error::Error>> {
+        let mut buf = Buffer::Int64(PrimitiveChunkedBuilder::new(
+            PlSmallStr::from_str("name"),
+            3,
+        ));
+        buf.add(&Bson::Int64(i64::MIN))?;
+        buf.add(&Bson::Int64((i64::MIN + i64::MAX) / 2))?;
+        buf.add(&Bson::Int64(i64::MAX))?;
+
+        assert_eq!(
+            buf.into_series()?,
+            Series::from_vec(
+                PlSmallStr::from_str("name"),
+                vec![i64::MIN, ((i64::MIN + i64::MAX) / 2), i64::MAX]
+            )
+        );
+        Ok(())
+    }
+    #[test]
+    fn test_buffer_null_handling() -> PolarsResult<()> {
+        let mut buf = Buffer::Int32(PrimitiveChunkedBuilder::new(
+            PlSmallStr::from_str("name"),
+            3,
+        ));
+
+        buf.add(&Bson::Int32(10))?;
+        buf.add_null();
+        buf.add(&Bson::Null)?;
+
+        let series = buf.into_series()?;
+        assert_eq!(series.null_count(), 2);
+        assert_eq!(series.len(), 3);
+        assert_eq!(
+            series,
+            Series::new(PlSmallStr::from_str("name"), vec![Some(10i32), None, None])
+        );
+        Ok(())
+    }
+    #[test]
+    fn test_buffer_type_mismatch_safety() -> PolarsResult<()> {
+        let mut buf = Buffer::Int32(PrimitiveChunkedBuilder::new(PlSmallStr::from_str("age"), 1));
+
+        // Schema expects Int32, but we give it a String
+        buf.add(&Bson::String("thirty".to_string()))?;
+
+        let series = buf.into_series()?;
+        assert!(series.is_null().get(0).unwrap()); // Should be null, not a crash
+        Ok(())
+    }
+}
