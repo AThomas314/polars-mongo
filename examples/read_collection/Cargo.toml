@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-polars-mongo = { path = "../.."}
-polars = { version = "0.53.0", features = [ "is_in", "lazy"] }
+polars-mongo = { path = "../../crates/polars-mongo" }
+polars =  {workspace=true}
 dotenv = "0.15.0"
-mongodb = "3.5.1"
-polars-plan = "0.53.0"
+mongodb =  {workspace=true}
+polars-plan =   {workspace=true}
