@@ -1,5 +1,5 @@
 [package]
-name = "polars-mongo"
+name = "polarsmongo2"
 description = "Connector to read polars dataframes from mongodb collections with full projection pushdown, including nested fields"
 keywords = ["dataframe", "query-engine", "arrow", "polars", "database", "mongo"]
 
