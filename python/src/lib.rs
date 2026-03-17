@@ -1,10 +1,9 @@
-use ::polars_mongo::prelude::{MongoLazyReader, MongoScan, MongoScanOptions};
-use polars::prelude::{AnonymousScan, AnonymousScanArgs, Expr, LazyFrame};
+use ::polars_mongo::prelude::MongoScan;
+use polars::prelude::{AnonymousScan, AnonymousScanArgs, Expr};
 use polars_core::prelude::PlSmallStr;
 use polars_core::schema::{Schema, SchemaRef};
 use pyo3::prelude::*;
 use pyo3_polars::*;
-use pyo3_stub_gen::define_stub_info_gatherer;
 use std::sync::Arc;
 #[pyclass]
 pub struct PyMongoScanner {

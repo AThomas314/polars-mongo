@@ -37,7 +37,7 @@ use rayon::prelude::*;
 
 use mongodb::{
     bson::{Bson, Document},
-    options::{ClientOptions, FindOptions},
+    options::FindOptions,
     sync::{Client, Collection, Cursor},
 };
 use polars_core::utils::accumulate_dataframes_vertical;
