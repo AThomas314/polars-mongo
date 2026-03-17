@@ -12,9 +12,12 @@ crate-type = ["cdylib"]
 [dependencies]
 chrono = "=0.4.41"
 polars = { workspace = true }
+polars-core = { workspace = true }
 polars-mongo = { path = "../crates/polars-mongo" }
-pyo3 = "0.27.0"
-pyo3-polars = {version = "0.26.0",features=["lazy"]}
+pyo3 = {version ="0.27.0",features=["serde","multiple-pymethods"]}
+pyo3-polars = {version = "0.26.0",features=["lazy","dtype-struct",
+    "dtype-full"
+]}
 pyo3-stub-gen = "0.10.0"
 
 [profile.release]

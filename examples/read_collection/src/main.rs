@@ -17,20 +17,21 @@ pub fn main() -> PolarsResult<()> {
         infer_schema_length: Some(1000),
         n_rows: None,
     })?
-    .filter(
-        col("hostname")
-            .eq(lit("ashish-LOQ-15IRX9"))
-            .and(col("startTimeLocal").eq(lit("Thu Mar 12 01:58:45.668")))
-            .and(col("startTimeLocal").eq(lit("Thu Mar 12 01:58:45.668")))
-            .and(col("cmdLine").is_not_null())
-            .or(col("pid").is_in(
-                lit(Series::new(
-                    PlSmallStr::from_str("name"),
-                    vec![225949i64, 1588i64],
-                )),
-                true,
-            )),
-    )
+    // .select([col("cmdLine.config"), col("cmdLine")])
+    // .filter(
+    //     col("hostname")
+    //         .eq(lit("ashish-LOQ-15IRX9"))
+    //         .and(col("startTimeLocal").eq(lit("Thu Mar 12 01:58:45.668")))
+    //         .and(col("startTimeLocal").eq(lit("Thu Mar 12 01:58:45.668")))
+    //         .and(col("cmdLine").is_not_null())
+    //         .or(col("pid").is_in(
+    //             lit(Series::new(
+    //                 PlSmallStr::from_str("name"),
+    //                 vec![225949i64, 1588i64],
+    //             )),
+    //             true,
+    //         )),
+    // )
     .collect()?;
     dbg!(df);
     Ok(())

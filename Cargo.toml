@@ -22,7 +22,7 @@ opt-level = 3
 
 [workspace.dependencies]
 mongodb = { version = "3.5.1", features = ["sync"] }
-polars = { version = "0.53.0", features = ["lazy", "dtype-full","is_in","timezones","object"] }
+polars = { version = "0.53.0", features = ["lazy", "dtype-full","is_in","timezones","object","serde",] }
 polars-plan = { version = "0.53.0" }
 polars-arrow = { version = "0.53.0" }
 polars-core = { version = "0.53.0" }

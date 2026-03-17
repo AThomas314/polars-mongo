@@ -43,11 +43,12 @@ use mongodb::{
 use polars_core::utils::accumulate_dataframes_vertical;
 use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct MongoScan {
-    client_options: ClientOptions,
+    connection_str: String,
     db: String,
     collection_name: String,
-    pub collection: Option<Collection<Document>>,
+    // pub collection: Option<Collection<Document>>,
     pub n_threads: Option<usize>,
     pub batch_size: Option<usize>,
     pub rechunk: bool,
@@ -64,15 +65,11 @@ impl MongoScan {
     }
 
     pub fn new(connection_str: String, db: String, collection: String) -> PolarsResult<Self> {
-        let client_options = ClientOptions::parse(connection_str).run().map_err(|e| {
-            PolarsError::InvalidOperation(format!("unable to connect to mongodb: {}", e).into())
-        })?;
-
         Ok(MongoScan {
-            client_options,
+            connection_str,
             db,
             collection_name: collection,
-            collection: None,
+            // collection: None,
             n_threads: None,
             rechunk: false,
             batch_size: None,
@@ -80,8 +77,7 @@ impl MongoScan {
     }
 
     fn get_collection(&self) -> Collection<Document> {
-        let client = Client::with_options(self.client_options.clone()).unwrap();
-
+        let client = Client::with_uri_str(self.connection_str.clone()).unwrap();
         let database = client.database(&self.db);
         database.collection::<Document>(&self.collection_name)
     }
@@ -114,8 +110,14 @@ impl AnonymousScan for MongoScan {
     fn scan(&self, scan_opts: AnonymousScanArgs) -> PolarsResult<DataFrame> {
         let collection = &self.get_collection();
         let projection = scan_opts.output_schema.clone().map(|schema| {
-            let prj = schema
-                .iter_names()
+            let mut root_keys = std::collections::HashSet::new();
+            for name in schema.iter_names() {
+                //Handle path collisions
+                let root_key = name.split('.').next().unwrap_or(name.as_str());
+                root_keys.insert(root_key.to_string());
+            }
+            let prj = root_keys
+                .into_iter()
                 .map(|name| (name.to_string(), Bson::Int64(1)));
 
             Document::from_iter(prj)
