@@ -23,9 +23,14 @@ def scan_mongo(
 
 
 def main():
-    lf: pl.LazyFrame = scan_mongo("mongodb://127.0.0.1:27017", "local", "startup_log")
+    lf: pl.LazyFrame = scan_mongo(
+        "mongodb://127.0.0.1:27017",
+        "sample_mflix",
+        "movies",
+        infer_schema_length=1,
+    )
 
-    print(lf.collect())
+    print(lf.head(10).collect())
 
 
 if __name__ == "__main__":

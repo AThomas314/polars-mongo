@@ -1,16 +1,30 @@
 [build-system]
-requires = ["maturin>=1.5,<2.0"]
+requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
 name = "polars-mongo"
 version = "0.1.0"
-description = "Connector to read polars dataframes from mongodb collections with full projection pushdown, including nested fields"
+description = "A high-performance, lazy MongoDB connector for Polars."
+readme = "README.md"
 requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [
+    { name = "Ashish Thomas", email = "ashishthomassm@gmail.com" },
+    { name = "Cory Grinstead", email = "cory.grinstead@gmail.com" }
+]
 dependencies = [
-    "polars>=0.38.0"
+    "polars>=1.38.0"
 ]
 classifiers = [
     "Programming Language :: Rust",
-    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
+    "Topic :: Database",
+    "Topic :: MongoDB",
+    "Topic :: Polars",
+    "Topic :: DataFrame",
 ]
+
+[tool.maturin]
+python-source = "python"
+module-name = "polars_mongo.polars_mongo"

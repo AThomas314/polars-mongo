@@ -18,7 +18,6 @@ pyo3 = {version ="0.27.0",features=["serde","multiple-pymethods"]}
 pyo3-polars = {version = "0.26.0",features=["lazy","dtype-struct",
     "dtype-full"
 ]}
-pyo3-stub-gen = "0.10.0"
 
 [profile.release]
 opt-level=3
