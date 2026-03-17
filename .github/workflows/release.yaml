@@ -20,7 +20,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --manifest-path python/Cargo.toml
+          args: --release --out dist --manifest-path Cargo.toml
           working-directory: python
           sccache: "true"
           manylinux: auto
@@ -41,7 +41,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: x64
-          args: --release --out dist --manifest-path python/Cargo.toml
+          args: --release --out dist --manifest-path Cargo.toml
           working-directory: python
           sccache: "true"
       - name: Upload wheels
@@ -64,7 +64,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --manifest-path python/Cargo.toml
+          args: --release --out dist --manifest-path Cargo.toml
           working-directory: python
           sccache: "true"
       - name: Upload wheels
@@ -81,7 +81,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: sdist
-          args: --out dist --manifest-path python/Cargo.toml
+          args: --out dist --manifest-path Cargo.toml
           working-directory: python
       - name: Upload sdist
         uses: actions/upload-artifact@v4
