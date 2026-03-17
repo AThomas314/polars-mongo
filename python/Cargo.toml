@@ -1,0 +1,22 @@
+[package]
+name = "polars_mongo"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "polars_mongo"
+crate-type = ["cdylib"]
+
+[dependencies]
+chrono = "=0.4.41"
+polars = { workspace = true }
+polars-mongo = { path = "../crates/polars-mongo" }
+pyo3 = "0.27.0"
+pyo3-polars = {version = "0.26.0",features=["lazy"]}
+pyo3-stub-gen = "0.10.0"
+
+[profile.release]
+opt-level=3
+lto="fat"

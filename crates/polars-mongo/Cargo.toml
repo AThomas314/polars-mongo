@@ -1,0 +1,32 @@
+[package]
+name = "polars-mongo"
+description = "Connector to read polars dataframes from mongodb collections with full projection pushdown, including nested fields"
+keywords = ["dataframe", "query-engine", "arrow", "polars", "database", "mongo"]
+
+# Inherit global settings from the root workspace
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+mongodb = {workspace=true}
+polars = {workspace=true}
+num  = {workspace=true}
+polars-arrow  = {workspace=true}
+polars-core  = {workspace=true}
+polars-time  = {workspace=true}
+rayon  = {workspace=true}
+serde = { workspace = true}
+tokio = {workspace=true}
+
+
+
+[dev-dependencies]
+serde_json = "1.0.149"
+testcontainers = { version = "0.27.1", features = ["blocking"] }
+testcontainers-modules = { version = "0.15", features = ["mongo"] }
