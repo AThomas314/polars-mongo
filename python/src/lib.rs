@@ -98,5 +98,3 @@ fn polars_mongo(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMongoScanner>()?;
     Ok(())
 }
-
-define_stub_info_gatherer!(stub_info);
