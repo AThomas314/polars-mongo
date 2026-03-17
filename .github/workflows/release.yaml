@@ -34,15 +34,30 @@ jobs:
         with:
           version: 0.13.0
 
-      - name: Build wheels
+      # Standard build for x86_64
+      - name: Build wheels (x86_64)
+        if: matrix.target == 'x86_64'
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --manifest-path Cargo.toml
+          manylinux: auto
+          args: --release --out dist --manifest-path Cargo.toml --interpreter python3.10
           working-directory: python
           sccache: "true"
-          zig: true
-          manylinux: auto
+
+      # Zig-powered build for ARM (fixes the 'ring' crate assembly error)
+      - name: Build wheels (aarch64)
+        if: matrix.target == 'aarch64'
+        uses: PyO3/maturin-action@v1
+        env:
+          CFLAGS_aarch64_unknown_linux_gnu: "-march=armv8-a"
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: "zig cc -target aarch64-linux-gnu"
+        with:
+          target: ${{ matrix.target }}
+          manylinux: off
+          args: --release --out dist --manifest-path Cargo.toml --zig --interpreter python3.10
+          working-directory: python
+          sccache: "true"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -65,7 +80,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --manifest-path Cargo.toml
+          args: --release --out dist --manifest-path Cargo.toml --interpreter python3.10
           working-directory: python
           sccache: "true"
       - name: Upload wheels
@@ -89,7 +104,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --manifest-path Cargo.toml
+          args: --release --out dist --manifest-path Cargo.toml --interpreter python3.10
           working-directory: python
           sccache: "true"
       - name: Upload wheels
