@@ -1,6 +1,8 @@
 # polars-mongo
 A high-performance, native MongoDB connector for Polars, written in Rust.
-
+Why polars-mongo?
+1. Filter columns directly at the database, avoiding the python overhead
+2. Keep polars syntax
 Key Features
 
     Native Speed: Built with Rust and pyo3-polars for maximum BSON-to-Arrow throughput.
