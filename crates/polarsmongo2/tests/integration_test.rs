@@ -1,7 +1,7 @@
 use mongodb::bson::Document;
 use mongodb::sync::Client;
 use polars::prelude::*;
-use polars_mongo::prelude::*;
+use polarsmongo2::prelude::*;
 use std::fs;
 use testcontainers::runners::SyncRunner;
 use testcontainers_modules::mongo::Mongo;

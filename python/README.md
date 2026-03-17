@@ -1,9 +1,18 @@
 # polars-mongo
-This package extends polars to read from mongodb collections via the LazyFrame apis. 
+A high-performance, native MongoDB connector for Polars, written in Rust.
 
-simply pip install polars_mongo (or rather, uv add polars_mongo)
-from polars_mongo import scan_mongo
+Key Features
 
-and pass connection_str,db, and collection to scan_mongo to get a lazyframe.
-Toplevel fields are returned by default, subfields can be returned as seperate columns using dot-notation (i.e select(["parent.child1.child2"])) 
-This library supports complete projection pushdown (Only the fields / subfields you required are queried from MongoDB). Predicate pushdown is planned for V0.2.0
+    Native Speed: Built with Rust and pyo3-polars for maximum BSON-to-Arrow throughput.
+
+    Projection Pushdown: Fully optimized to query only the fields you select (including subfields).
+
+    Lazy Integration: Works seamlessly with the pl.LazyFrame API.
+
+Installation    
+    uv add polars-mongo
+    # or
+    pip install polars-mongo
+    
+Roadmap
+    [ ] V0.2.0: Predicate Pushdown (Filtering at the database level).
