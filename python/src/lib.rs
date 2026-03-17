@@ -1,4 +1,4 @@
-use ::polars_mongo::prelude::MongoScan;
+use ::polarsmongo2::prelude::MongoScan;
 use polars::prelude::{AnonymousScan, AnonymousScanArgs, Expr};
 use polars_core::prelude::PlSmallStr;
 use polars_core::schema::{Schema, SchemaRef};

@@ -13,7 +13,7 @@ crate-type = ["cdylib"]
 chrono = "=0.4.41"
 polars = { workspace = true }
 polars-core = { workspace = true }
-polars-mongo = { path = "../crates/polarsmongo2" }
+polarsmongo2 = { path = "../crates/polarsmongo2" }
 pyo3 = {version ="0.27.0",features=["abi3-py38","serde","multiple-pymethods"]}
 pyo3-polars = {version = "0.26.0",features=["lazy","dtype-struct",
     "dtype-full"

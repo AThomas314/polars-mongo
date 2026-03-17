@@ -1,5 +1,5 @@
 use polars::prelude::*;
-use polars_mongo::prelude::*;
+use polarsmongo2::prelude::*;
 pub fn main() -> PolarsResult<()> {
     dotenv::dotenv().unwrap();
     // let _ = LazyFrame::scan_parquet(path, args);
