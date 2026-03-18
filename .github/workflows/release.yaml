@@ -54,7 +54,13 @@ jobs:
           args: --release --out dist --manifest-path Cargo.toml --zig --interpreter python3.10
           working-directory: python
           sccache: "true"
-
+      - name: Rename Linux ARM Wheel for PyPI
+        if: matrix.target == 'aarch64'
+        run: |
+          cd python/dist
+          for f in *linux_aarch64.whl; do
+            mv "$f" "${f/linux_aarch64/manylinux2014_aarch64}"
+          done
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
