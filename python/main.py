@@ -1,6 +1,6 @@
 import polars as pl
+from _polars_mongo import PyMongoScanner  # type: ignore
 from polars.io.plugins import register_io_source
-from polars_mongo import PyMongoScanner  # type: ignore
 
 
 def scan_mongo(
@@ -19,3 +19,12 @@ def scan_mongo(
         io_source=source_generator,
         schema=scanner.schema,
     )
+
+
+def main():
+    print(scan_mongo("mongodb://127.0.0.1:27017", "local", "startup_log"))
+    print(scan_mongo("mongodb://127.0.0.1:27017", "local", "startup_log").collect())
+
+
+if __name__ == "__main__":
+    main()

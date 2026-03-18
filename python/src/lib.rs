@@ -94,7 +94,7 @@ impl PyMongoScanner {
     }
 }
 #[pymodule]
-fn polars_mongo(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _polars_mongo(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMongoScanner>()?;
     Ok(())
 }
