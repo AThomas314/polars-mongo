@@ -1,6 +1,7 @@
 import polars as pl
-from _polars_mongo import PyMongoScanner  # type: ignore
 from polars.io.plugins import register_io_source
+
+from ._polars_mongo import PyMongoScanner  # type: ignore
 
 
 def scan_mongo(
