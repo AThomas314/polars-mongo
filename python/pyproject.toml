@@ -20,9 +20,8 @@ classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: 3",
     "Topic :: Database",
-    "Topic :: MongoDB",
-    "Topic :: Polars",
-    "Topic :: DataFrame",
+    "Topic :: Scientific/Engineering",
+    "License :: OSI Approved :: MIT License", # Matches your license field
 ]
 
 [tool.maturin]
