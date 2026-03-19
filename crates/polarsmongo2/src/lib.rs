@@ -43,12 +43,11 @@ use mongodb::{
 use polars_core::utils::accumulate_dataframes_vertical;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+// #[derive(Serialize, Deserialize)]
 pub struct MongoScan {
     connection_str: String,
     db: String,
     collection_name: String,
-    // pub collection: Option<Collection<Document>>,
     pub n_threads: Option<usize>,
     pub batch_size: Option<usize>,
     pub rechunk: bool,

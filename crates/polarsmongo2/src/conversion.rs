@@ -63,6 +63,7 @@ impl From<&Bson> for Wrap<DataType> {
             Bson::ObjectId(_) => DataType::String,
             Bson::Symbol(_) => DataType::String,
             Bson::Undefined => DataType::Unknown(UnknownKind::Any),
+            Bson::Binary(_) => DataType::Binary,
             _ => DataType::String,
         };
         Wrap(dt)
@@ -149,7 +150,7 @@ impl<'a, 'b> From<&'b Bson> for Wrap<AnyValue<'a>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mongodb::bson::{doc, oid::ObjectId, DateTime as MongoDateTime};
+    use mongodb::bson::{DateTime as MongoDateTime, doc, oid::ObjectId};
 
     #[test]
     fn test_dtype_primitives() {

@@ -45,6 +45,7 @@ impl PyMongoScanner {
     #[pyo3(signature = (with_columns=None, _predicate=None, n_rows=None, _batch_size=None))]
     fn __call__(
         &self,
+        py: Python,
         with_columns: Option<Vec<String>>,
         _predicate: Option<PyExpr>,
         n_rows: Option<usize>,
@@ -74,7 +75,7 @@ impl PyMongoScanner {
         };
         let with_columns = with_columns.map(|cols| {
             cols.into_iter()
-                .map(PlSmallStr::from) // or |s| s.into()
+                .map(PlSmallStr::from)
                 .collect::<Arc<[PlSmallStr]>>()
         });
         let args = AnonymousScanArgs {
@@ -85,11 +86,9 @@ impl PyMongoScanner {
             predicate: predicate,
         };
 
-        let df = self
-            .inner
-            .scan(args)
+        let df = py
+            .detach(move || self.inner.scan(args))
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-
         Ok(PyDataFrame(df))
     }
 }

@@ -7,14 +7,15 @@ name = "polars-mongo"
 dynamic = ["version"]
 description = "A high-performance, lazy MongoDB connector for Polars."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
     { name = "Ashish Thomas", email = "ashishthomassm@gmail.com" },
     { name = "Cory Grinstead", email = "cory.grinstead@gmail.com" }
 ]
 dependencies = [
-    "polars>=1.38.0"
+    "maturin>=1.12.6",
+    "polars>=1.39.2",
 ]
 classifiers = [
     "Programming Language :: Rust",

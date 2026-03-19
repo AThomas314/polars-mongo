@@ -21,7 +21,7 @@ lto = "fat"
 opt-level = 3
 codegen-units = 1
 panic = "abort"
-strip = "symbols"
+# strip = "symbols"
 
 [workspace.dependencies]
 mongodb = { version = "3.5.1", features = ["sync"] }
