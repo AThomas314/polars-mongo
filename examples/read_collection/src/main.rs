@@ -10,7 +10,7 @@ pub fn main() -> PolarsResult<()> {
         connection_str,
         db,
         collection,
-        infer_schema_length: Some(1000),
+        infer_schema_length: Some(10000),
         n_rows: None,
     })?
     .select([

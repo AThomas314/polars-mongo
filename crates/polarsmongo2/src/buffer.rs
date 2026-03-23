@@ -162,6 +162,11 @@ impl<'a> Buffer<'a> {
 
             String(buf) => {
                 match value {
+                    Bson::Int32(v) => buf.append_value(v.to_string()),
+                    Bson::Int64(v) => buf.append_value(v.to_string()),
+                    Bson::Decimal128(v) => buf.append_value(v.to_string()),
+                    Bson::Boolean(v) => buf.append_value(v.to_string()),
+                    Bson::Double(v) => buf.append_value(v.to_string()),
                     Bson::RegularExpression(r) => buf.append_value(r.to_string()),
                     Bson::ObjectId(oid) => buf.append_value(oid.to_hex()),
                     Bson::JavaScriptCode(v) => buf.append_value(v),

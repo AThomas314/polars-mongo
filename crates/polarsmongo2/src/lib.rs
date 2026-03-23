@@ -118,14 +118,11 @@ impl AnonymousScan for MongoScan {
             let prj = root_keys
                 .into_iter()
                 .map(|name| (name.to_string(), Bson::Int64(1)));
-
             Document::from_iter(prj)
         });
         let mut find_options = FindOptions::default();
-
         find_options.projection = projection;
         find_options.batch_size = self.batch_size.map(|b| b as u32);
-
         let schema = scan_opts.output_schema.unwrap_or_else(|| {
             let filtered: Schema = scan_opts
                 .schema
@@ -202,7 +199,6 @@ impl AnonymousScan for MongoScan {
             row_fields
         });
 
-        // infer_schema will now merge all these paths across the 'limit' documents
         let schema = infer_schema(docs_iter, limit);
         Ok(Arc::new(schema))
     }
@@ -259,23 +255,19 @@ fn collect_fields(doc: &Document, prefix: Option<&str>, fields: &mut Vec<(PlSmal
     }
 }
 fn get_nested_bson<'a>(doc: &'a Document, path: &str) -> Option<&'a Bson> {
-    let mut current_value: Option<&Bson> = None;
     let mut current_doc = doc;
-    let parts: Vec<&str> = path.split('.').collect();
-
-    for (i, part) in parts.iter().enumerate() {
-        if i == parts.len() - 1 {
-            // We've reached the final key in the path
-            current_value = current_doc.get(part);
+    let mut iter = path.split('.').peekable();
+    while let Some(part) = iter.next() {
+        if iter.peek().is_none() {
+            return current_doc.get(part);
         } else {
-            // Move deeper into the nested document
             match current_doc.get(part) {
                 Some(Bson::Document(next_doc)) => current_doc = next_doc,
-                _ => return None, // Path doesn't exist or isn't a document
+                _ => return None,
             }
         }
     }
-    current_value
+    None
 }
 
 impl MongoLazyReader for LazyFrame {}
