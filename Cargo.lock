@@ -2942,7 +2942,7 @@ dependencies = [
 
 [[package]]
 name = "polars_mongo"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "chrono",
  "polars",
@@ -2954,7 +2954,7 @@ dependencies = [
 
 [[package]]
 name = "polarsmongo2"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "mongodb",
  "num",
