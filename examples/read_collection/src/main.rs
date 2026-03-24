@@ -10,15 +10,19 @@ pub fn main() -> PolarsResult<()> {
         connection_str,
         db,
         collection,
-        infer_schema_length: Some(10000),
+        infer_schema_length: Some(100),
         n_rows: None,
     })?
     .select([
+        col("_id"),
         col("title"),
         col("year"),
         col("directors"),
         col("imdb.rating"),
     ])
+    .rename(["imdb.rating"], ["Rating"], true)
+    .filter(col("Rating").gt(lit(5.0)))
+    .filter(col("year").gt(lit(2000)))
     .collect()?;
     dbg!(df);
     Ok(())

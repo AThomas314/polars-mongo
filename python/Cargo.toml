@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 chrono = "=0.4.41"
+
 polars = { workspace = true }
 polars-core = { workspace = true }
 polarsmongo2 = { path = "../crates/polarsmongo2" }
@@ -18,3 +19,7 @@ pyo3 = {version ="0.27.0",features=["abi3-py38","serde","multiple-pymethods","ge
 pyo3-polars = {version = "0.26.0",features=["lazy","dtype-struct",
     "dtype-full"
 ]}
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+tikv-jemallocator = "0.6.1"
+[target.'cfg(target_os = "windows")'.dependencies]
+mimalloc = "0.1.48"

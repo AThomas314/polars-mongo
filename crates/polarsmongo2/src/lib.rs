@@ -2,7 +2,7 @@
 //! Usage:
 //! ```no_run
 //! use polars::prelude::*;
-//! use polars_mongo::prelude::*;
+//! use polarsmongo2::prelude::*;
 //!
 //! pub fn main() -> PolarsResult<()> {
 //!     let connection_str = std::env::var("POLARS_MONGO_CONNECTION_URI").unwrap();
@@ -26,24 +26,23 @@
 #![deny(clippy::all)]
 mod buffer;
 mod conversion;
+mod predicates;
 pub mod prelude;
-
 use crate::buffer::*;
-
+use crate::predicates::*;
 use conversion::Wrap;
 use polars::{frame::row::*, prelude::*};
 use polars_core::POOL;
 use rayon::prelude::*;
 
 use mongodb::{
-    bson::{Bson, Document},
+    bson::{Bson, Document, doc},
     options::FindOptions,
     sync::{Client, Collection, Cursor},
 };
 use polars_core::utils::accumulate_dataframes_vertical;
 use serde::{Deserialize, Serialize};
 
-// #[derive(Serialize, Deserialize)]
 pub struct MongoScan {
     connection_str: String,
     db: String,
@@ -68,7 +67,6 @@ impl MongoScan {
             connection_str,
             db,
             collection_name: collection,
-            // collection: None,
             n_threads: None,
             rechunk: false,
             batch_size: None,
@@ -120,6 +118,7 @@ impl AnonymousScan for MongoScan {
                 .map(|name| (name.to_string(), Bson::Int64(1)));
             Document::from_iter(prj)
         });
+        let predicate = parse_expr(&scan_opts.predicate);
         let mut find_options = FindOptions::default();
         find_options.projection = projection;
         find_options.batch_size = self.batch_size.map(|b| b as u32);
@@ -151,7 +150,7 @@ impl AnonymousScan for MongoScan {
                     let start = idx * rows_per_thread;
 
                     let cursor = collection
-                        .find(Document::new())
+                        .find(predicate.clone())
                         .skip(start as u64)
                         .limit(rows_per_thread as i64)
                         .projection(projection.clone())
@@ -168,7 +167,15 @@ impl AnonymousScan for MongoScan {
                         .into_values()
                         .map(|buf| Column::from(buf.into_series().unwrap()))
                         .collect::<Vec<Column>>();
-                    DataFrame::new(rows_per_thread, series)
+                    let df = if let Some(predicate) = &scan_opts.predicate {
+                        DataFrame::new(series[0].len(), series)?
+                            .lazy()
+                            .filter(predicate.clone())
+                            .collect()
+                    } else {
+                        DataFrame::new(series[0].len(), series)
+                    };
+                    df
                 })
             })
             .collect::<PolarsResult<Vec<_>>>()?;
@@ -203,7 +210,8 @@ impl AnonymousScan for MongoScan {
         Ok(Arc::new(schema))
     }
     fn allows_predicate_pushdown(&self) -> bool {
-        false
+        true
+        // false
     }
     fn allows_projection_pushdown(&self) -> bool {
         true

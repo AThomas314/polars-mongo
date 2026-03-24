@@ -42,6 +42,9 @@ pub(crate) fn init_buffers(
                 DataType::Date => {
                     Buffer::Date(PrimitiveChunkedBuilder::new(name.clone(), capacity))
                 }
+                DataType::Binary => {
+                    Buffer::Binary(BinaryChunkedBuilder::new(name.clone(), capacity))
+                }
                 _ => Buffer::All((Vec::with_capacity(capacity), name.as_str())),
             };
             Ok((name.clone(), builder))
@@ -61,6 +64,7 @@ pub(crate) enum Buffer<'a> {
     String(StringChunkedBuilder),
     Datetime(PrimitiveChunkedBuilder<Int64Type>),
     Date(PrimitiveChunkedBuilder<Int32Type>),
+    Binary(BinaryChunkedBuilder),
     All((Vec<AnyValue<'a>>, &'a str)),
 }
 
@@ -81,6 +85,7 @@ impl<'a> Buffer<'a> {
                 .unwrap(),
             Buffer::Date(v) => v.finish().into_series().cast(&DataType::Date).unwrap(),
             Buffer::String(v) => v.finish().into_series(),
+            Buffer::Binary(v) => v.finish().into_series(),
             Buffer::All((vals, name)) => Series::new(name.into(), vals),
         };
         Ok(s)
@@ -98,6 +103,7 @@ impl<'a> Buffer<'a> {
             Buffer::String(v) => v.append_null(),
             Buffer::Datetime(v) => v.append_null(),
             Buffer::Date(v) => v.append_null(),
+            Buffer::Binary(v) => v.append_null(),
             Buffer::All((v, _)) => v.push(AnyValue::Null),
         };
     }
@@ -186,6 +192,14 @@ impl<'a> Buffer<'a> {
             Date(buf) => {
                 let v = deserialize_date::<i32>(value);
                 buf.append_option(v);
+                Ok(())
+            }
+            Binary(buf) => {
+                match value {
+                    Bson::Binary(b) => buf.append_value(&b.bytes),
+                    Bson::ObjectId(oid) => buf.append_value(&oid.bytes()),
+                    _ => buf.append_null(),
+                }
                 Ok(())
             }
             All((buf, _)) => {
@@ -357,6 +371,42 @@ mod tests {
 
         let series = buf.into_series()?;
         assert!(series.is_null().get(0).unwrap()); // Should be null, not a crash
+        Ok(())
+    }
+    #[test]
+    fn test_binary_buffer() -> PolarsResult<()> {
+        let mut buf = Buffer::Binary(BinaryChunkedBuilder::new(PlSmallStr::from_str("data"), 2));
+        let raw_bytes = b"ferris".to_vec();
+        buf.add(&Bson::Binary(mongodb::bson::Binary {
+            subtype: mongodb::bson::spec::BinarySubtype::Generic,
+            bytes: raw_bytes.clone(),
+        }))?;
+
+        let series = buf.into_series()?;
+        assert_eq!(series.dtype(), &DataType::Binary);
+        assert_eq!(series.len(), 1);
+        let val = series.get(0).unwrap();
+        if let AnyValue::Binary(b) = val {
+            assert_eq!(b, &raw_bytes);
+        } else {
+            panic!("Expected binary value");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_object_id_to_binary_buffer() -> PolarsResult<()> {
+        let mut buf = Buffer::Binary(BinaryChunkedBuilder::new(PlSmallStr::from_str("oid"), 1));
+        let oid = mongodb::bson::oid::ObjectId::new();
+        buf.add(&Bson::ObjectId(oid))?;
+        let series = buf.into_series()?;
+        assert_eq!(series.dtype(), &DataType::Binary);
+        let val = series.get(0).unwrap();
+        if let AnyValue::Binary(b) = val {
+            assert_eq!(b, &oid.bytes());
+        } else {
+            panic!("Expected binary value for ObjectId");
+        }
         Ok(())
     }
 }

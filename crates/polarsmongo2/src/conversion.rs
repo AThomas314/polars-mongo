@@ -60,7 +60,7 @@ impl From<&Bson> for Wrap<DataType> {
             Bson::Timestamp(_) => DataType::String,
             Bson::Document(doc) => return doc.into(),
             Bson::DateTime(_) => DataType::Datetime(TimeUnit::Milliseconds, None),
-            Bson::ObjectId(_) => DataType::String,
+            Bson::ObjectId(_) => DataType::Binary,
             Bson::Symbol(_) => DataType::String,
             Bson::Undefined => DataType::Unknown(UnknownKind::Any),
             Bson::Binary(_) => DataType::Binary,
@@ -90,11 +90,8 @@ impl<'a> From<Bson> for Wrap<AnyValue<'a>> {
             Bson::DateTime(dt) => {
                 AnyValue::Datetime(dt.timestamp_millis(), TimeUnit::Milliseconds, None)
             }
-            Bson::Binary(b) => {
-                let s = Series::new("".into(), &b.bytes);
-                AnyValue::List(s)
-            }
-            Bson::ObjectId(oid) => AnyValue::StringOwned(oid.to_string().into()),
+            Bson::Binary(b) => AnyValue::BinaryOwned(b.bytes),
+            Bson::ObjectId(oid) => AnyValue::BinaryOwned(oid.bytes().to_vec()),
             Bson::Symbol(s) => AnyValue::StringOwned(s.into()),
             v => AnyValue::StringOwned(format!("{:#?}", v).into()),
         };
@@ -119,10 +116,7 @@ impl<'a, 'b> From<&'b Bson> for Wrap<AnyValue<'a>> {
             Bson::Int32(v) => AnyValue::Int32(*v),
             Bson::Int64(v) => AnyValue::Int64(*v),
             Bson::Timestamp(v) => AnyValue::StringOwned(format!("{:#?}", v).into()),
-            Bson::Binary(b) => {
-                let s = Series::new("".into(), &b.bytes);
-                AnyValue::List(s)
-            }
+            Bson::Binary(b) => AnyValue::BinaryOwned(b.bytes.clone()),
             Bson::DateTime(dt) => {
                 AnyValue::Datetime(dt.timestamp_millis(), TimeUnit::Milliseconds, None)
             }
@@ -139,7 +133,7 @@ impl<'a, 'b> From<&'b Bson> for Wrap<AnyValue<'a>> {
 
                 AnyValue::StructOwned(Box::new(vals))
             }
-            Bson::ObjectId(oid) => AnyValue::StringOwned(oid.to_string().into()),
+            Bson::ObjectId(oid) => AnyValue::BinaryOwned(oid.bytes().to_vec()),
             Bson::Symbol(s) => AnyValue::StringOwned(s.into()),
             v => AnyValue::StringOwned(format!("{:#?}", v).into()),
         };
@@ -161,11 +155,18 @@ mod tests {
             (Bson::Boolean(true), DataType::Boolean),
             (Bson::String("test".into()), DataType::String),
             (Bson::Null, DataType::Null),
-            (Bson::ObjectId(ObjectId::new()), DataType::String),
             (
                 Bson::DateTime(MongoDateTime::from_millis(1000)),
                 DataType::Datetime(TimeUnit::Milliseconds, None),
             ),
+            (
+                Bson::Binary(mongodb::bson::Binary {
+                    subtype: mongodb::bson::spec::BinarySubtype::Generic,
+                    bytes: b"123".to_vec(),
+                }),
+                DataType::Binary,
+            ),
+            (Bson::ObjectId(ObjectId::new()), DataType::Binary),
         ];
 
         for (bson_val, expected_dt) in cases {
@@ -232,6 +233,20 @@ mod tests {
             AnyValue::Boolean(true)
         );
         assert_eq!(Wrap::<AnyValue>::from(&Bson::Null).0, AnyValue::Null);
+        let oid = mongodb::bson::oid::ObjectId::new();
+        assert_eq!(
+            Wrap::<AnyValue>::from(&Bson::ObjectId(oid)).0,
+            AnyValue::BinaryOwned(oid.bytes().to_vec())
+        );
+        let bytes = b"bytes".to_vec();
+        let b_bin = Bson::Binary(mongodb::bson::Binary {
+            subtype: mongodb::bson::spec::BinarySubtype::Generic,
+            bytes: bytes.clone(),
+        });
+        assert_eq!(
+            Wrap::<AnyValue>::from(&b_bin).0,
+            AnyValue::BinaryOwned(bytes)
+        );
     }
 
     #[test]
@@ -264,8 +279,8 @@ mod tests {
 
         let av: Wrap<AnyValue> = (&b_oid).into();
         match av.0 {
-            AnyValue::StringOwned(s) => assert_eq!(s.as_str(), oid.to_string()),
-            _ => panic!("Expected StringOwned for ObjectId"),
+            AnyValue::BinaryOwned(s) => assert_eq!(s, oid.bytes()),
+            _ => panic!("Expected BinaryOwned for ObjectId"),
         }
     }
 

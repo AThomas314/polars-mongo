@@ -5,6 +5,14 @@ use polars_core::schema::{Schema, SchemaRef};
 use pyo3::prelude::*;
 use pyo3_polars::*;
 use std::sync::Arc;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+#[cfg(target_os = "windows")]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[pyclass]
 pub struct PyMongoScanner {
     inner: MongoScan,

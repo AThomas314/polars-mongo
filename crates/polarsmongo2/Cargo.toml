@@ -1,6 +1,6 @@
 [package]
 name = "polarsmongo2"
-description = "Connector to read polars dataframes from mongodb collections with full projection pushdown, including nested fields"
+description = "Connector to read polars dataframes from mongodb collections with full projection pushdown, including nested fields, and predicate pushdown"
 keywords = ["dataframe","lazyframe" , "polars", "mongo"]
 
 # Inherit global settings from the root workspace
@@ -20,6 +20,7 @@ num  = {workspace=true}
 polars-arrow  = {workspace=true}
 polars-core  = {workspace=true}
 polars-time  = {workspace=true}
+polars-plan  = {workspace=true}
 rayon  = {workspace=true}
 serde = { workspace = true}
 tokio = {workspace=true}
