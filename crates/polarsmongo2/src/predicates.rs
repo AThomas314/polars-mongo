@@ -51,6 +51,14 @@ fn lit_to_bson(lit: &LiteralValue) -> Option<Bson> {
             AnyValue::Boolean(b) => Some(Bson::Boolean(*b)),
             AnyValue::String(s) => Some(Bson::String(s.to_string())),
             AnyValue::StringOwned(s) => Some(Bson::String(s.to_string())),
+            AnyValue::Binary(b) => Some(Bson::Binary(mongodb::bson::Binary {
+                subtype: mongodb::bson::spec::BinarySubtype::Generic,
+                bytes: b.to_vec(),
+            })),
+            AnyValue::BinaryOwned(b) => Some(Bson::Binary(mongodb::bson::Binary {
+                subtype: mongodb::bson::spec::BinarySubtype::Generic,
+                bytes: b.clone(),
+            })),
             _ => None,
         },
         LiteralValue::Dyn(d) => match d {
