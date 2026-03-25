@@ -41,4 +41,4 @@ fn main() -> PolarsResult<()> {
 
 Roadmap
     [x] V0.1.x: Core vectorized engine, Projection Pushdown, Nested field support.
-    [ ] V0.2.0: Predicate Pushdown (filtering at the database level).
+    [x] V0.2.0: Predicate Pushdown (filtering at the database level).

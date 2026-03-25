@@ -6,17 +6,11 @@ rustflags = ["-C", "link-arg=-fuse-ld=mold", ]
 linker = "clang"
 rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
-[target.x86_64-apple-darwin]
-rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+# [target.x86_64-apple-darwin]
+# rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 
-[target.aarch64-apple-darwin]
-rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+# [target.aarch64-apple-darwin]
+# rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 
 [target.x86_64-pc-windows-msvc]
 linker = "lld-link.exe"
-
-# [profile.dev]
-# codegen-backend = "cranelift"
-
-# [profile.test]
-# codegen-backend = "cranelift"

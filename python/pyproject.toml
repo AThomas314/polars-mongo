@@ -14,8 +14,7 @@ authors = [
     { name = "Cory Grinstead", email = "cory.grinstead@gmail.com" }
 ]
 dependencies = [
-    "maturin>=1.12.6",
-    "polars>=1.39.2",
+    "polars>=1.39.3",
 ]
 classifiers = [
     "Programming Language :: Rust",
@@ -28,3 +27,10 @@ classifiers = [
 [tool.maturin]
 module-name = "polars_mongo._polars_mongo"
 python-source = "."
+
+[dependency-groups]
+benchmark = [
+    "pymongo>=4.16.0",
+    "pymongoarrow>=1.13.0",
+
+]

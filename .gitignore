@@ -4,3 +4,4 @@ target/
 *.archive
 __pycache__/
 dist/
+*.so
