@@ -1,9 +1,8 @@
 use crate::conversion::*;
-use mongodb::bson::Bson;
+use mongodb::bson::RawBsonRef;
 use num::traits::NumCast;
 use polars::prelude::*;
 use polars_arrow::types::NativeType;
-
 pub(crate) fn init_buffers(
     schema: &polars::prelude::Schema,
     capacity: usize,
@@ -107,12 +106,12 @@ impl<'a> Buffer<'a> {
             Buffer::All((v, _)) => v.push(AnyValue::Null),
         };
     }
-    pub(crate) fn add(&mut self, value: &Bson) -> PolarsResult<()> {
+    pub(crate) fn add(&mut self, value: RawBsonRef) -> PolarsResult<()> {
         use Buffer::*;
         match self {
             Boolean(buf) => {
                 match value {
-                    Bson::Boolean(v) => buf.append_value(*v),
+                    RawBsonRef::Boolean(v) => buf.append_value(v),
                     _ => buf.append_null(),
                 }
                 Ok(())
@@ -168,18 +167,20 @@ impl<'a> Buffer<'a> {
 
             String(buf) => {
                 match value {
-                    Bson::Int32(v) => buf.append_value(v.to_string()),
-                    Bson::Int64(v) => buf.append_value(v.to_string()),
-                    Bson::Decimal128(v) => buf.append_value(v.to_string()),
-                    Bson::Boolean(v) => buf.append_value(v.to_string()),
-                    Bson::Double(v) => buf.append_value(v.to_string()),
-                    Bson::RegularExpression(r) => buf.append_value(r.to_string()),
-                    Bson::ObjectId(oid) => buf.append_value(oid.to_hex()),
-                    Bson::JavaScriptCode(v) => buf.append_value(v),
-                    Bson::String(v) => buf.append_value(v),
-                    Bson::Document(doc) => buf.append_value(doc.to_string()),
-                    Bson::Array(arr) => buf.append_value(format!("{:#?}", arr)),
-                    Bson::Symbol(s) => buf.append_value(s),
+                    RawBsonRef::Int32(v) => buf.append_value(v.to_string()),
+                    RawBsonRef::Int64(v) => buf.append_value(v.to_string()),
+                    RawBsonRef::Decimal128(v) => buf.append_value(v.to_string()),
+                    RawBsonRef::Boolean(v) => buf.append_value(v.to_string()),
+                    RawBsonRef::Double(v) => buf.append_value(v.to_string()),
+                    RawBsonRef::RegularExpression(r) => {
+                        buf.append_value(format!("/{}/{}", r.pattern, r.options))
+                    }
+                    RawBsonRef::ObjectId(oid) => buf.append_value(oid.to_hex()),
+                    RawBsonRef::JavaScriptCode(v) => buf.append_value(v),
+                    RawBsonRef::String(v) => buf.append_value(v),
+                    RawBsonRef::Document(doc) => buf.append_value(format!("{:?}", doc)),
+                    RawBsonRef::Array(arr) => buf.append_value(format!("{:#?}", arr)),
+                    RawBsonRef::Symbol(s) => buf.append_value(s),
                     _ => buf.append_null(),
                 }
                 Ok(())
@@ -196,8 +197,8 @@ impl<'a> Buffer<'a> {
             }
             Binary(buf) => {
                 match value {
-                    Bson::Binary(b) => buf.append_value(&b.bytes),
-                    Bson::ObjectId(oid) => buf.append_value(&oid.bytes()),
+                    RawBsonRef::Binary(b) => buf.append_value(&b.bytes),
+                    RawBsonRef::ObjectId(oid) => buf.append_value(&oid.bytes()),
                     _ => buf.append_null(),
                 }
                 Ok(())
@@ -210,33 +211,33 @@ impl<'a> Buffer<'a> {
         }
     }
 }
-fn deserialize_float<T: NativeType + NumCast>(value: &Bson) -> Option<T> {
+fn deserialize_float<T: NativeType + NumCast>(value: RawBsonRef) -> Option<T> {
     match value {
-        Bson::Double(num) => num::traits::cast::<f64, T>(*num),
-        Bson::Int32(num) => num::traits::cast::<i32, T>(*num),
-        Bson::Int64(num) => num::traits::cast::<i64, T>(*num),
-        Bson::Boolean(b) => num::traits::cast::<i32, T>(*b as i32),
+        RawBsonRef::Double(num) => num::traits::cast::<f64, T>(num),
+        RawBsonRef::Int32(num) => num::traits::cast::<i32, T>(num),
+        RawBsonRef::Int64(num) => num::traits::cast::<i64, T>(num),
+        RawBsonRef::Boolean(b) => num::traits::cast::<i32, T>(b as i32),
         _ => None,
     }
 }
 
-fn deserialize_number<T: NativeType + NumCast>(value: &Bson) -> Option<T> {
+fn deserialize_number<T: NativeType + NumCast>(value: RawBsonRef) -> Option<T> {
     match value {
-        Bson::Double(num) => num::traits::cast::<f64, T>(*num),
-        Bson::Int32(num) => num::traits::cast::<i32, T>(*num),
-        Bson::Int64(num) => num::traits::cast::<i64, T>(*num),
-        Bson::Boolean(b) => num::traits::cast::<i32, T>(*b as i32),
+        RawBsonRef::Double(num) => num::traits::cast::<f64, T>(num),
+        RawBsonRef::Int32(num) => num::traits::cast::<i32, T>(num),
+        RawBsonRef::Int64(num) => num::traits::cast::<i64, T>(num),
+        RawBsonRef::Boolean(b) => num::traits::cast::<i32, T>(b as i32),
         _ => None,
     }
 }
 
-fn deserialize_date<T: NativeType + NumCast>(value: &Bson) -> Option<T> {
+fn deserialize_date<T: NativeType + NumCast>(value: RawBsonRef) -> Option<T> {
     match value {
-        Bson::Double(num) => num::traits::cast::<f64, T>(*num),
-        Bson::Int32(num) => num::traits::cast::<i32, T>(*num),
-        Bson::Int64(num) => num::traits::cast::<i64, T>(*num),
-        Bson::Boolean(b) => num::traits::cast::<i32, T>(*b as i32),
-        Bson::DateTime(dt) => num::traits::cast::<i64, T>(dt.timestamp_millis()),
+        RawBsonRef::Double(num) => num::traits::cast::<f64, T>(num),
+        RawBsonRef::Int32(num) => num::traits::cast::<i32, T>(num),
+        RawBsonRef::Int64(num) => num::traits::cast::<i64, T>(num),
+        RawBsonRef::Boolean(b) => num::traits::cast::<i32, T>(b as i32),
+        RawBsonRef::DateTime(dt) => num::traits::cast::<i64, T>(dt.timestamp_millis()),
         _ => None,
     }
 }
@@ -249,53 +250,53 @@ mod tests {
 
     #[test]
     fn deserialize_double() {
-        let d = Bson::Double(314159.265359);
-        assert_eq!(deserialize_number(&d), Some(314159.265359));
+        let d = RawBsonRef::Double(314159.265359);
+        assert_eq!(deserialize_number(d), Some(314159.265359));
     }
     #[test]
     fn deserialize_i32() {
-        let d = Bson::Int32(314159);
-        assert_eq!(deserialize_number(&d), Some(314159i32));
+        let d = RawBsonRef::Int32(314159);
+        assert_eq!(deserialize_number(d), Some(314159i32));
     }
     #[test]
     fn deserialize_i64() {
-        let d = Bson::Int64(314159);
-        assert_eq!(deserialize_number(&d), Some(314159i64));
+        let d = RawBsonRef::Int64(314159);
+        assert_eq!(deserialize_number(d), Some(314159i64));
     }
     #[test]
     fn deserialize_bool_true() {
-        let d = Bson::Boolean(true);
-        assert_eq!(deserialize_number(&d), Some(1));
+        let d = RawBsonRef::Boolean(true);
+        assert_eq!(deserialize_number(d), Some(1));
     }
     #[test]
     fn deserialize_bool_false() {
-        let d = Bson::Boolean(false);
-        assert_eq!(deserialize_number(&d), Some(0));
+        let d = RawBsonRef::Boolean(false);
+        assert_eq!(deserialize_number(d), Some(0));
     }
     #[test]
     fn test_deserialize_date() {
         use mongodb::bson::DateTime as MongoDateTime;
         let millis = 1704067200000i64;
-        let dt = Bson::DateTime(MongoDateTime::from_millis(millis));
+        let dt = RawBsonRef::DateTime(MongoDateTime::from_millis(millis));
 
-        assert_eq!(deserialize_date::<i64>(&dt), Some(millis));
+        assert_eq!(deserialize_date::<i64>(dt), Some(millis));
 
-        let d_num = Bson::Int64(millis);
-        assert_eq!(deserialize_date::<i64>(&d_num), Some(millis));
+        let d_num = RawBsonRef::Int64(millis);
+        assert_eq!(deserialize_date::<i64>(d_num), Some(millis));
 
         let small_millis = 12345678i64;
-        let dt_small = Bson::DateTime(MongoDateTime::from_millis(small_millis));
-        assert_eq!(deserialize_date::<i32>(&dt_small), Some(12345678i32));
+        let dt_small = RawBsonRef::DateTime(MongoDateTime::from_millis(small_millis));
+        assert_eq!(deserialize_date::<i32>(dt_small), Some(12345678i32));
 
-        let invalid = Bson::String("2024-01-01".to_string());
-        assert_eq!(deserialize_date::<i64>(&invalid), None);
+        let invalid = RawBsonRef::String("2024-01-01");
+        assert_eq!(deserialize_date::<i64>(invalid), None);
     }
     #[test]
     fn test_bool_buffer() -> Result<(), Box<dyn std::error::Error>> {
         let mut buf = Buffer::Boolean(BooleanChunkedBuilder::new(PlSmallStr::from_str("name"), 3));
-        buf.add(&Bson::Boolean(false))?;
-        buf.add(&Bson::Boolean(false))?;
-        buf.add(&Bson::Boolean(true))?;
+        buf.add(RawBsonRef::Boolean(false))?;
+        buf.add(RawBsonRef::Boolean(false))?;
+        buf.add(RawBsonRef::Boolean(true))?;
 
         assert_eq!(
             buf.into_series()?,
@@ -310,9 +311,9 @@ mod tests {
             PlSmallStr::from_str("name"),
             3,
         ));
-        buf.add(&Bson::Int32(i32::MIN))?;
-        buf.add(&Bson::Int32((i32::MIN + i32::MAX) / 2))?;
-        buf.add(&Bson::Int32(i32::MAX))?;
+        buf.add(RawBsonRef::Int32(i32::MIN))?;
+        buf.add(RawBsonRef::Int32((i32::MIN + i32::MAX) / 2))?;
+        buf.add(RawBsonRef::Int32(i32::MAX))?;
 
         assert_eq!(
             buf.into_series()?,
@@ -329,9 +330,9 @@ mod tests {
             PlSmallStr::from_str("name"),
             3,
         ));
-        buf.add(&Bson::Int64(i64::MIN))?;
-        buf.add(&Bson::Int64((i64::MIN + i64::MAX) / 2))?;
-        buf.add(&Bson::Int64(i64::MAX))?;
+        buf.add(RawBsonRef::Int64(i64::MIN))?;
+        buf.add(RawBsonRef::Int64((i64::MIN + i64::MAX) / 2))?;
+        buf.add(RawBsonRef::Int64(i64::MAX))?;
 
         assert_eq!(
             buf.into_series()?,
@@ -349,9 +350,9 @@ mod tests {
             3,
         ));
 
-        buf.add(&Bson::Int32(10))?;
+        buf.add(RawBsonRef::Int32(10))?;
         buf.add_null();
-        buf.add(&Bson::Null)?;
+        buf.add(RawBsonRef::Null)?;
 
         let series = buf.into_series()?;
         assert_eq!(series.null_count(), 2);
@@ -365,10 +366,7 @@ mod tests {
     #[test]
     fn test_buffer_type_mismatch_safety() -> PolarsResult<()> {
         let mut buf = Buffer::Int32(PrimitiveChunkedBuilder::new(PlSmallStr::from_str("age"), 1));
-
-        // Schema expects Int32, but we give it a String
-        buf.add(&Bson::String("thirty".to_string()))?;
-
+        buf.add(RawBsonRef::String("thirty"))?;
         let series = buf.into_series()?;
         assert!(series.is_null().get(0).unwrap()); // Should be null, not a crash
         Ok(())
@@ -376,10 +374,10 @@ mod tests {
     #[test]
     fn test_binary_buffer() -> PolarsResult<()> {
         let mut buf = Buffer::Binary(BinaryChunkedBuilder::new(PlSmallStr::from_str("data"), 2));
-        let raw_bytes = b"ferris".to_vec();
-        buf.add(&Bson::Binary(mongodb::bson::Binary {
+        let raw_bytes = b"ferris";
+        buf.add(RawBsonRef::Binary(mongodb::bson::RawBinaryRef {
             subtype: mongodb::bson::spec::BinarySubtype::Generic,
-            bytes: raw_bytes.clone(),
+            bytes: raw_bytes.as_slice(),
         }))?;
 
         let series = buf.into_series()?;
@@ -387,7 +385,7 @@ mod tests {
         assert_eq!(series.len(), 1);
         let val = series.get(0).unwrap();
         if let AnyValue::Binary(b) = val {
-            assert_eq!(b, &raw_bytes);
+            assert_eq!(b, raw_bytes);
         } else {
             panic!("Expected binary value");
         }
@@ -398,7 +396,7 @@ mod tests {
     fn test_object_id_to_binary_buffer() -> PolarsResult<()> {
         let mut buf = Buffer::Binary(BinaryChunkedBuilder::new(PlSmallStr::from_str("oid"), 1));
         let oid = mongodb::bson::oid::ObjectId::new();
-        buf.add(&Bson::ObjectId(oid))?;
+        buf.add(RawBsonRef::ObjectId(oid))?;
         let series = buf.into_series()?;
         assert_eq!(series.dtype(), &DataType::Binary);
         let val = series.get(0).unwrap();

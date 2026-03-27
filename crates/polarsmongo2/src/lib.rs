@@ -31,12 +31,13 @@ pub mod prelude;
 use crate::buffer::*;
 use crate::predicates::*;
 use conversion::Wrap;
+use mongodb::bson::RawBsonRef;
 use polars::{frame::row::*, prelude::*};
 use polars_core::POOL;
 use rayon::prelude::*;
 
 use mongodb::{
-    bson::{Bson, Document, doc},
+    bson::{Bson, Document, RawDocument, RawDocumentBuf, doc},
     options::FindOptions,
     sync::{Client, Collection, Cursor},
 };
@@ -73,26 +74,24 @@ impl MongoScan {
         })
     }
 
-    fn get_collection(&self) -> Collection<Document> {
+    fn get_collection(&self) -> Collection<RawDocumentBuf> {
         let client = Client::with_uri_str(self.connection_str.clone()).unwrap();
         let database = client.database(&self.db);
-        database.collection::<Document>(&self.collection_name)
+        database.collection::<RawDocumentBuf>(&self.collection_name)
     }
 
     fn parse_lines<'a>(
         &self,
-        mut cursor: Cursor<Document>,
+        mut cursor: Cursor<RawDocumentBuf>,
         buffers: &mut PlIndexMap<PlSmallStr, Buffer<'a>>,
     ) -> mongodb::error::Result<()> {
-        while let Some(Ok(doc)) = cursor.next() {
+        while let Some(res) = cursor.next() {
+            let doc_buf = res?;
             for (field_path, inner_buffer) in buffers.iter_mut() {
-                match get_nested_bson(&doc, field_path.as_str()) {
-                    Some(v) => {
-                        inner_buffer.add(v).expect("Failed to add value to buffer");
-                    }
-                    None => {
-                        inner_buffer.add_null();
-                    }
+                if let Some(v) = get_nested_bson(&*doc_buf, field_path.as_str()) {
+                    inner_buffer.add(v).expect("Failed to add value to buffer");
+                } else {
+                    inner_buffer.add_null();
                 }
             }
         }
@@ -188,7 +187,7 @@ impl AnonymousScan for MongoScan {
     }
 
     fn schema(&self, infer_schema_length: Option<usize>) -> PolarsResult<Arc<Schema>> {
-        let collection: Collection<Document> = self.get_collection();
+        let collection: Collection<RawDocumentBuf> = self.get_collection();
         let limit = infer_schema_length.unwrap_or(100);
 
         let cursor = collection
@@ -247,30 +246,43 @@ pub trait MongoLazyReader {
     }
 }
 
-fn collect_fields(doc: &Document, prefix: Option<&str>, fields: &mut Vec<(PlSmallStr, DataType)>) {
-    for (key, value) in doc {
+fn collect_fields(
+    doc: &RawDocument, // Change from RawDocumentBuf to &RawDocument
+    prefix: Option<&str>,
+    fields: &mut Vec<(PlSmallStr, DataType)>,
+) {
+    for x in doc.iter() {
+        let (key, value) = x.expect("Invalid BSON");
         let name = match prefix {
             Some(p) => format!("{}.{}", p, key),
-            None => key.clone(),
+            None => key.to_string(),
         };
 
         let dtype: Wrap<DataType> = value.into();
         fields.push((PlSmallStr::from_str(&name), dtype.0.clone()));
 
-        if let Bson::Document(inner_doc) = value {
+        if let RawBsonRef::Document(inner_doc) = value {
+            // No .to_raw_document_buf()! Just pass the reference.
             collect_fields(inner_doc, Some(&name), fields);
         }
     }
 }
-fn get_nested_bson<'a>(doc: &'a Document, path: &str) -> Option<&'a Bson> {
+
+fn get_nested_bson<'a>(doc: &'a RawDocument, path: &str) -> Option<RawBsonRef<'a>> {
     let mut current_doc = doc;
     let mut iter = path.split('.').peekable();
+
     while let Some(part) = iter.next() {
+        let bson_ref = current_doc.get(part).ok().flatten()?;
+
         if iter.peek().is_none() {
-            return current_doc.get(part);
+            return Some(bson_ref);
         } else {
-            match current_doc.get(part) {
-                Some(Bson::Document(next_doc)) => current_doc = next_doc,
+            match bson_ref {
+                RawBsonRef::Document(next_doc) => {
+                    // This is the key: we just point current_doc to the inner reference
+                    current_doc = next_doc;
+                }
                 _ => return None,
             }
         }
@@ -285,30 +297,30 @@ mod tests {
     use super::*;
     use mongodb::bson::doc;
 
-    // -------------------------------------------------------------------------
-    // 1. Tests for `get_nested_bson`
-    // -------------------------------------------------------------------------
-
     #[test]
-    fn test_get_nested_bson_flat() {
+    fn test_get_nested_bson_flat() -> Result<(), Box<dyn std::error::Error>> {
         let document = doc! {
             "name": "Alice",
             "age": 30i32
         };
-
+        let document = RawDocumentBuf::from_document(&document)?;
         // Test existing top-level fields
         assert_eq!(
             get_nested_bson(&document, "name"),
-            Some(&Bson::String("Alice".to_string()))
+            Some(RawBsonRef::String("Alice"))
         );
-        assert_eq!(get_nested_bson(&document, "age"), Some(&Bson::Int32(30)));
+        assert_eq!(
+            get_nested_bson(&document, "age"),
+            Some(RawBsonRef::Int32(30))
+        );
 
         // Test missing field
         assert_eq!(get_nested_bson(&document, "missing"), None);
+        Ok(())
     }
 
     #[test]
-    fn test_get_nested_bson_deep() {
+    fn test_get_nested_bson_deep() -> Result<(), Box<dyn std::error::Error>> {
         let document = doc! {
             "user": {
                 "profile": {
@@ -317,29 +329,31 @@ mod tests {
                 }
             }
         };
+        let document = RawDocumentBuf::from_document(&document)?;
 
         assert_eq!(
             get_nested_bson(&document, "user.profile.email"),
-            Some(&Bson::String("alice@example.com".to_string()))
+            Some(RawBsonRef::String("alice@example.com"))
         );
         assert_eq!(
             get_nested_bson(&document, "user.profile.id"),
-            Some(&Bson::Int32(100))
+            Some(RawBsonRef::Int32(100))
         );
 
         let profile_doc = get_nested_bson(&document, "user.profile").unwrap();
-        assert!(matches!(profile_doc, Bson::Document(_)));
+        assert!(matches!(profile_doc, RawBsonRef::Document(_)));
 
         assert_eq!(get_nested_bson(&document, "user.profile.id.invalid"), None);
+        Ok(())
     }
 
     #[test]
-    fn test_collect_fields_flat() {
+    fn test_collect_fields_flat() -> Result<(), Box<dyn std::error::Error>> {
         let document = doc! {
             "name": "Bob",
             "active": true
         };
-
+        let document = RawDocumentBuf::from_document(&document)?;
         let mut fields = Vec::new();
         collect_fields(&document, None, &mut fields);
 
@@ -350,16 +364,17 @@ mod tests {
         assert_eq!(fields[0].1, DataType::Boolean);
         assert_eq!(fields[1].0.as_str(), "name");
         assert_eq!(fields[1].1, DataType::String);
+        Ok(())
     }
 
     #[test]
-    fn test_collect_fields_nested() {
+    fn test_collect_fields_nested() -> Result<(), Box<dyn std::error::Error>> {
         let document = doc! {
             "config": {
                 "port": 8080i32
             }
         };
-
+        let document = RawDocumentBuf::from_document(&document)?;
         let mut fields = Vec::new();
         collect_fields(&document, None, &mut fields);
 
@@ -383,6 +398,7 @@ mod tests {
                 assert_eq!(struct_fields[0].dtype(), &DataType::Int32);
             }
             _ => panic!("Expected config to be a Struct datatype"),
-        }
+        };
+        Ok(())
     }
 }

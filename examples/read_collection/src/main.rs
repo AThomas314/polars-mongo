@@ -6,7 +6,7 @@ pub fn main() -> PolarsResult<()> {
     let db = std::env::var("POLARS_MONGO_DB").unwrap();
     let collection = std::env::var("POLARS_MONGO_COLLECTION").unwrap();
     let df = LazyFrame::scan_mongo_collection(MongoScanOptions {
-        batch_size: None,
+        batch_size: Some(5000),
         connection_str,
         db,
         collection,
@@ -21,8 +21,8 @@ pub fn main() -> PolarsResult<()> {
         col("imdb.rating"),
     ])
     .rename(["imdb.rating"], ["Rating"], true)
-    .filter(col("Rating").gt(lit(5.0)))
-    .filter(col("year").gt(lit(2000)))
+    // .filter(col("Rating").gt(lit(5.0)))
+    // .filter(col("year").gt(lit(2000)))
     .collect()?;
     dbg!(df);
     Ok(())

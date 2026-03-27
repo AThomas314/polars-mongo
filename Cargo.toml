@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 authors = [
     "Ashish Thomas <ashishthomassm@gmail.com>",
@@ -34,3 +34,7 @@ num = "0.4.3"
 rayon = "1.11.0"
 serde = { version = "1.0.228", features = ["derive", "rc"]}
 tokio = "1.50.0"
+
+[profile.profile]
+inherits="release"
+debug=2
