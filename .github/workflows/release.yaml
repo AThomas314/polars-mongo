@@ -23,11 +23,9 @@ jobs:
         target: [x86_64, aarch64]
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
         with:
@@ -36,7 +34,6 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         env:
-          # This env var is ignored by x86_64, so it's safe to keep here
           CFLAGS_aarch64_unknown_linux_gnu: "-march=armv8-a"
         with:
           target: ${{ matrix.target }}
@@ -46,7 +43,7 @@ jobs:
             --out dist
             --manifest-path Cargo.toml
             --zig
-            --compatibility manylinux2014
+            --manylinux 2014
             --interpreter python3.10
           working-directory: python
           sccache: "true"
