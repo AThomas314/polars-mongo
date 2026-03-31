@@ -2987,7 +2987,7 @@ dependencies = [
 
 [[package]]
 name = "polars_mongo"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "mimalloc",
@@ -3001,7 +3001,7 @@ dependencies = [
 
 [[package]]
 name = "polarsmongo2"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "itoa",
  "mongodb",
