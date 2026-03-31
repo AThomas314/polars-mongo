@@ -158,13 +158,12 @@ impl AnonymousScan for MongoScan {
                         .map_err(|err| {
                             PolarsError::ComputeError(format!("Mongo find failed: {}", err).into())
                         })?;
-
                     let mut buffers = init_buffers(schema.as_ref(), rows_per_thread)?;
                     self.parse_lines(cursor, &mut buffers)
                         .map_err(|err| PolarsError::ComputeError(format!("{:#?}", err).into()))?;
                     let series = buffers
-                        .into_values()
-                        .map(|buf| Column::from(buf.into_series().unwrap()))
+                        .into_iter()
+                        .map(|(name, buf)| Column::from(buf.into_series(name).unwrap()))
                         .collect::<Vec<Column>>();
                     let df = if let Some(predicate) = &scan_opts.predicate {
                         DataFrame::new(series[0].len(), series)?

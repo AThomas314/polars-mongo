@@ -6,7 +6,7 @@ pub fn main() -> PolarsResult<()> {
     let db = std::env::var("POLARS_MONGO_DB").unwrap();
     let collection = std::env::var("POLARS_MONGO_COLLECTION").unwrap();
     let df = LazyFrame::scan_mongo_collection(MongoScanOptions {
-        batch_size: Some(5000),
+        batch_size: Some(1000),
         connection_str,
         db,
         collection,

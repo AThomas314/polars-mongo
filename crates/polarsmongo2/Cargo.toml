@@ -24,6 +24,7 @@ polars-plan  = {workspace=true}
 rayon  = {workspace=true}
 serde = { workspace = true}
 tokio = {workspace=true}
+itoa = "1.0.18"
 
 
 
