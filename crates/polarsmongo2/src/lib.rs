@@ -279,7 +279,6 @@ fn get_nested_bson<'a>(doc: &'a RawDocument, path: &str) -> Option<RawBsonRef<'a
         } else {
             match bson_ref {
                 RawBsonRef::Document(next_doc) => {
-                    // This is the key: we just point current_doc to the inner reference
                     current_doc = next_doc;
                 }
                 _ => return None,
