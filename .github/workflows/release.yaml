@@ -59,6 +59,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wheels-linux-${{ matrix.target }}
+          path: python/dist # <--- This was the missing line!
   windows:
     runs-on: windows-latest
     strategy:
