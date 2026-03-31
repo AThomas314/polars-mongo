@@ -274,120 +274,111 @@ mod tests {
         let invalid = RawBsonRef::String("2024-01-01");
         assert_eq!(deserialize_date::<i64>(invalid), None);
     }
-    //     #[test]
-    //     fn test_bool_buffer() -> Result<(), Box<dyn std::error::Error>> {
-    //         let mut buf = Buffer::Boolean(BooleanChunkedBuilder::new(PlSmallStr::from_str("name"), 3));
-    //         buf.add(RawBsonRef::Boolean(false))?;
-    //         buf.add(RawBsonRef::Boolean(false))?;
-    //         buf.add(RawBsonRef::Boolean(true))?;
+    #[test]
+    fn test_bool_buffer() -> Result<(), Box<dyn std::error::Error>> {
+        let mut buf = Buffer::Boolean(MutableBooleanArray::new());
+        buf.add(RawBsonRef::Boolean(false))?;
+        buf.add(RawBsonRef::Boolean(false))?;
+        buf.add(RawBsonRef::Boolean(true))?;
 
-    //         assert_eq!(
-    //             buf.into_series()?,
-    //             Series::from_vec(PlSmallStr::from_str("name"), vec![0, 0, 1])
-    //                 .cast(&DataType::Boolean)?
-    //         );
-    //         Ok(())
-    //     }
-    //     #[test]
-    //     fn test_i32_buffer() -> Result<(), Box<dyn std::error::Error>> {
-    //         let mut buf = Buffer::Int32(PrimitiveChunkedBuilder::new(
-    //             PlSmallStr::from_str("name"),
-    //             3,
-    //         ));
-    //         buf.add(RawBsonRef::Int32(i32::MIN))?;
-    //         buf.add(RawBsonRef::Int32((i32::MIN + i32::MAX) / 2))?;
-    //         buf.add(RawBsonRef::Int32(i32::MAX))?;
+        assert_eq!(
+            buf.into_series(PlSmallStr::from_str("name"))?,
+            Series::from_vec(PlSmallStr::from_str("name"), vec![0, 0, 1])
+                .cast(&DataType::Boolean)?
+        );
+        Ok(())
+    }
+    #[test]
+    fn test_i32_buffer() -> Result<(), Box<dyn std::error::Error>> {
+        let mut buf = Buffer::Int32(MutablePrimitiveArray::new());
+        buf.add(RawBsonRef::Int32(i32::MIN))?;
+        buf.add(RawBsonRef::Int32((i32::MIN + i32::MAX) / 2))?;
+        buf.add(RawBsonRef::Int32(i32::MAX))?;
 
-    //         assert_eq!(
-    //             buf.into_series()?,
-    //             Series::from_vec(
-    //                 PlSmallStr::from_str("name"),
-    //                 vec![i32::MIN, ((i32::MIN + i32::MAX) / 2), i32::MAX]
-    //             )
-    //         );
-    //         Ok(())
-    //     }
-    //     #[test]
-    //     fn test_i64_buffer() -> Result<(), Box<dyn std::error::Error>> {
-    //         let mut buf = Buffer::Int64(PrimitiveChunkedBuilder::new(
-    //             PlSmallStr::from_str("name"),
-    //             3,
-    //         ));
-    //         buf.add(RawBsonRef::Int64(i64::MIN))?;
-    //         buf.add(RawBsonRef::Int64((i64::MIN + i64::MAX) / 2))?;
-    //         buf.add(RawBsonRef::Int64(i64::MAX))?;
+        assert_eq!(
+            buf.into_series(PlSmallStr::from_str("name"))?,
+            Series::from_vec(
+                PlSmallStr::from_str("name"),
+                vec![i32::MIN, ((i32::MIN + i32::MAX) / 2), i32::MAX]
+            )
+        );
+        Ok(())
+    }
+    #[test]
+    fn test_i64_buffer() -> Result<(), Box<dyn std::error::Error>> {
+        let mut buf = Buffer::Int64(MutablePrimitiveArray::new());
+        buf.add(RawBsonRef::Int64(i64::MIN))?;
+        buf.add(RawBsonRef::Int64((i64::MIN + i64::MAX) / 2))?;
+        buf.add(RawBsonRef::Int64(i64::MAX))?;
 
-    //         assert_eq!(
-    //             buf.into_series()?,
-    //             Series::from_vec(
-    //                 PlSmallStr::from_str("name"),
-    //                 vec![i64::MIN, ((i64::MIN + i64::MAX) / 2), i64::MAX]
-    //             )
-    //         );
-    //         Ok(())
-    //     }
-    //     #[test]
-    //     fn test_buffer_null_handling() -> PolarsResult<()> {
-    //         let mut buf = Buffer::Int32(PrimitiveChunkedBuilder::new(
-    //             PlSmallStr::from_str("name"),
-    //             3,
-    //         ));
+        assert_eq!(
+            buf.into_series(PlSmallStr::from_str("name"))?,
+            Series::from_vec(
+                PlSmallStr::from_str("name"),
+                vec![i64::MIN, ((i64::MIN + i64::MAX) / 2), i64::MAX]
+            )
+        );
+        Ok(())
+    }
+    #[test]
+    fn test_buffer_null_handling() -> PolarsResult<()> {
+        let mut buf = Buffer::Int32(MutablePrimitiveArray::new());
 
-    //         buf.add(RawBsonRef::Int32(10))?;
-    //         buf.add_null();
-    //         buf.add(RawBsonRef::Null)?;
+        buf.add(RawBsonRef::Int32(10))?;
+        buf.add_null();
+        buf.add(RawBsonRef::Null)?;
 
-    //         let series = buf.into_series()?;
-    //         assert_eq!(series.null_count(), 2);
-    //         assert_eq!(series.len(), 3);
-    //         assert_eq!(
-    //             series,
-    //             Series::new(PlSmallStr::from_str("name"), vec![Some(10i32), None, None])
-    //         );
-    //         Ok(())
-    //     }
-    //     #[test]
-    //     fn test_buffer_type_mismatch_safety() -> PolarsResult<()> {
-    //         let mut buf = Buffer::Int32(PrimitiveChunkedBuilder::new(PlSmallStr::from_str("age"), 1));
-    //         buf.add(RawBsonRef::String("thirty"))?;
-    //         let series = buf.into_series()?;
-    //         assert!(series.is_null().get(0).unwrap()); // Should be null, not a crash
-    //         Ok(())
-    //     }
-    //     #[test]
-    //     fn test_binary_buffer() -> PolarsResult<()> {
-    //         let mut buf = Buffer::Binary(BinaryChunkedBuilder::new(PlSmallStr::from_str("data"), 2));
-    //         let raw_bytes = b"ferris";
-    //         buf.add(RawBsonRef::Binary(mongodb::bson::RawBinaryRef {
-    //             subtype: mongodb::bson::spec::BinarySubtype::Generic,
-    //             bytes: raw_bytes.as_slice(),
-    //         }))?;
+        let series = buf.into_series(PlSmallStr::from_str("name"))?;
+        assert_eq!(series.null_count(), 2);
+        assert_eq!(series.len(), 3);
+        assert_eq!(
+            series,
+            Series::new(PlSmallStr::from_str("name"), vec![Some(10i32), None, None])
+        );
+        Ok(())
+    }
+    #[test]
+    fn test_buffer_type_mismatch_safety() -> PolarsResult<()> {
+        let mut buf = Buffer::Int32(MutablePrimitiveArray::new());
+        buf.add(RawBsonRef::String("thirty"))?;
+        let series = buf.into_series(PlSmallStr::from_str("name"))?;
+        assert!(series.is_null().get(0).unwrap()); // Should be null, not a crash
+        Ok(())
+    }
+    #[test]
+    fn test_binary_buffer() -> PolarsResult<()> {
+        let mut buf = Buffer::Binary(MutableBinaryViewArray::new());
+        let raw_bytes = b"ferris";
+        buf.add(RawBsonRef::Binary(mongodb::bson::RawBinaryRef {
+            subtype: mongodb::bson::spec::BinarySubtype::Generic,
+            bytes: raw_bytes.as_slice(),
+        }))?;
 
-    //         let series = buf.into_series()?;
-    //         assert_eq!(series.dtype(), &DataType::Binary);
-    //         assert_eq!(series.len(), 1);
-    //         let val = series.get(0).unwrap();
-    //         if let AnyValue::Binary(b) = val {
-    //             assert_eq!(b, raw_bytes);
-    //         } else {
-    //             panic!("Expected binary value");
-    //         }
-    //         Ok(())
-    //     }
+        let series = buf.into_series(PlSmallStr::from_str("name"))?;
+        assert_eq!(series.dtype(), &DataType::Binary);
+        assert_eq!(series.len(), 1);
+        let val = series.get(0).unwrap();
+        if let AnyValue::Binary(b) = val {
+            assert_eq!(b, raw_bytes);
+        } else {
+            panic!("Expected binary value");
+        }
+        Ok(())
+    }
 
-    //     #[test]
-    //     fn test_object_id_to_binary_buffer() -> PolarsResult<()> {
-    //         let mut buf = Buffer::Binary(BinaryChunkedBuilder::new(PlSmallStr::from_str("oid"), 1));
-    //         let oid = mongodb::bson::oid::ObjectId::new();
-    //         buf.add(RawBsonRef::ObjectId(oid))?;
-    //         let series = buf.into_series()?;
-    //         assert_eq!(series.dtype(), &DataType::Binary);
-    //         let val = series.get(0).unwrap();
-    //         if let AnyValue::Binary(b) = val {
-    //             assert_eq!(b, &oid.bytes());
-    //         } else {
-    //             panic!("Expected binary value for ObjectId");
-    //         }
-    //         Ok(())
-    //     }
+    #[test]
+    fn test_object_id_to_binary_buffer() -> PolarsResult<()> {
+        let mut buf = Buffer::Binary(MutableBinaryViewArray::new());
+        let oid = mongodb::bson::oid::ObjectId::new();
+        buf.add(RawBsonRef::ObjectId(oid))?;
+        let series = buf.into_series(PlSmallStr::from_str("name"))?;
+        assert_eq!(series.dtype(), &DataType::Binary);
+        let val = series.get(0).unwrap();
+        if let AnyValue::Binary(b) = val {
+            assert_eq!(b, &oid.bytes());
+        } else {
+            panic!("Expected binary value for ObjectId");
+        }
+        Ok(())
+    }
 }
